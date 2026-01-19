@@ -42,3 +42,8 @@ export interface Chapter {
   challenge: Challenge;
   tutorialSteps: TutorialStep[];
 }
+
+// New types for position data
+export type StringFretOffsets = [number, number[]]; // [StringIndex, [FretOffsets]]
+export type PositionMap = Record<number, StringFretOffsets[]>;
+export type ScalePositionData = Record<ScaleType, PositionMap>;

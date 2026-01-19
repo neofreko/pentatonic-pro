@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { NOTES, MIDI_TUNING, TUNING, PENTATONIC_POSITIONS } from './constants';
-import { ScaleType, Chapter, TutorialStep } from './types';
+import { NOTES, MIDI_TUNING, TUNING } from './constants';
+import { ScaleType, TutorialStep } from './types';
 import { CHAPTERS } from './data/chapters';
+import { PENTATONIC_POSITIONS } from './data/positions'; // Imported from new data file
 import Fretboard from './components/Fretboard';
 import { getScaleLesson } from './services/geminiService';
-import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Target, Brain, Trophy, GraduationCap, ArrowRight, Lightbulb, PlayCircle, Award, Compass, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, FastForward, Info, Layers, Activity } from 'lucide-react';
-import { isNoteInScale, getNoteAtPosition } from './utils/musicLogic';
+import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity } from 'lucide-react';
 import { playNote } from './utils/audio';
 
 type AppPhase = 'PREVIEW' | 'LEARNING' | 'CHALLENGE';
@@ -51,10 +52,10 @@ const App: React.FC = () => {
     const lowEOpenIdx = TUNING[5];
     const baseFret = (rootIdx - lowEOpenIdx + 12) % 12;
 
-    const posData = PENTATONIC_POSITIONS[scaleType][currentPosition as keyof typeof PENTATONIC_POSITIONS['minor']];
+    const posData = PENTATONIC_POSITIONS[scaleType][currentPosition];
     const ids = new Set<string>();
     
-    posData.forEach(([sIdx, frets]: [number, number[]]) => {
+    posData.forEach(([sIdx, frets]) => {
       frets.forEach(fOffset => {
         let f = baseFret + fOffset;
         while (f < 0) f += 12;
@@ -75,7 +76,7 @@ const App: React.FC = () => {
 
     const sequence: {s: number, f: number, midi: number, pair: number[], tripletIdx: number}[] = [];
     
-    // ASCENDING TRIPLET GROUPS (1-2-3, 2-3-4, etc.)
+    // ASCENDING TRIPLET GROUPS (UP: 1-2-3, 2-3-4, etc.)
     for (let i = 0; i < notesInBox.length - 2; i++) {
       const triplet = [notesInBox[i], notesInBox[i+1], notesInBox[i+2]];
       const activeStrings = Array.from(new Set(triplet.map(n => n.s)));
@@ -84,7 +85,7 @@ const App: React.FC = () => {
       });
     }
 
-    // DESCENDING TRIPLET GROUPS (Top-Middle-Bottom, Middle-Bottom-Next, etc.)
+    // DESCENDING TRIPLET GROUPS (DOWN: Top-Mid-Bottom, Mid-Bottom-Next...)
     for (let i = notesInBox.length - 1; i >= 2; i--) {
       const triplet = [notesInBox[i], notesInBox[i-1], notesInBox[i-2]];
       const activeStrings = Array.from(new Set(triplet.map(n => n.s)));
@@ -131,7 +132,7 @@ const App: React.FC = () => {
         const item = fullSequence[i];
         setActiveNoteId(`${item.s}-${item.f}`);
         playNote(item.midi);
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 320));
     }
 
     setActiveNoteId(null);
@@ -345,13 +346,15 @@ const App: React.FC = () => {
                         {currentStepData && (
                             <div className="flex items-center gap-3 bg-amber-500/20 border border-amber-500/50 px-4 py-2 rounded-2xl animate-in zoom-in duration-300 shadow-lg shadow-amber-500/5">
                                 <div className="flex flex-col">
-                                    <span className="text-[8px] font-black uppercase text-amber-500/60 leading-none mb-0.5">Pattern: Groups of 3</span>
-                                    <span className="text-xs font-black text-amber-500 leading-none">Step {currentStepData.tripletIdx} of 3</span>
+                                    <span className="text-[8px] font-black uppercase text-amber-500/60 leading-none mb-0.5">Scale Progress</span>
+                                    <span className="text-xs font-black text-amber-500 leading-none">Step {currentStepIndex + 1} of {fullSequence.length}</span>
                                 </div>
                                 <div className="w-[1px] h-6 bg-amber-500/20" />
                                 <div className="flex flex-col">
-                                    <span className="text-[8px] font-black uppercase text-amber-500/60 leading-none mb-0.5">2 Notes Per String</span>
-                                    <span className="text-xs font-black text-amber-500 leading-none uppercase tracking-tighter">Triplet Sequence</span>
+                                    <span className="text-[8px] font-black uppercase text-amber-500/60 leading-none mb-0.5">Active Run</span>
+                                    <span className="text-xs font-black text-amber-500 leading-none uppercase tracking-tighter">
+                                        {currentStepIndex < fullSequence.length / 2 ? 'Ascending' : 'Descending'}
+                                    </span>
                                 </div>
                             </div>
                         )}

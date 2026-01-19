@@ -25,6 +25,7 @@ export const getIntervalName = (noteName: string, rootNote: string, scaleType: S
       case 0: return 'R';
       case 3: return 'b3';
       case 5: return '4';
+      case 6: return 'b5'; // Added support for Chapter 3 Blue Note
       case 7: return '5';
       case 10: return 'b7';
       default: return '';

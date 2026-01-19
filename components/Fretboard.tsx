@@ -38,14 +38,14 @@ const Fretboard: React.FC<FretboardProps> = ({
 
   /**
    * SOLID COLOR ENGINE
-   * We use specific solid fills for dimmed vs active states.
-   * NO TRANSPARENCY is used on scale notes.
+   * Every scale note is 100% opaque.
+   * Dimmed states use desaturation and darkness rather than translucency.
    */
   const getIntervalColor = (interval: string, isDimmed: boolean) => {
     if (isDimmed) return 'bg-slate-800 ring-slate-800 text-slate-500';
     
     switch (interval) {
-      case 'R': return 'bg-amber-400 ring-amber-400 text-slate-950'; // SOLID YELLOW
+      case 'R': return 'bg-amber-400 ring-amber-400 text-slate-950'; // SOLID AMBER ROOT
       case 'b3':
       case '3': return 'bg-emerald-400 ring-emerald-300 text-slate-950';
       case '4': return 'bg-sky-400 ring-sky-300 text-slate-950';
@@ -54,7 +54,7 @@ const Fretboard: React.FC<FretboardProps> = ({
       case '7': return 'bg-rose-400 ring-rose-300 text-slate-950';
       case '2': return 'bg-orange-400 ring-orange-300 text-slate-950';
       case '6': return 'bg-fuchsia-400 ring-fuchsia-300 text-slate-950';
-      default: return 'bg-slate-100 ring-slate-200 text-slate-950';
+      default: return 'bg-slate-200 ring-slate-300 text-slate-950';
     }
   };
 
@@ -79,9 +79,9 @@ const Fretboard: React.FC<FretboardProps> = ({
         effects += " shadow-lg";
       }
 
-      // Root note gets a thick white ring for extra focus, even when dimmed (at reduced scale)
+      // Root note features a thick solid ring to stay identifiable even when desaturated/dimmed
       if (isRoot) {
-        effects += ` ring-white ${isDimmed ? 'ring-2' : 'ring-4'} ring-offset-2 shadow-[0_0_25px_rgba(245,158,11,0.3)]`;
+        effects += ` ring-white ${isDimmed ? 'ring-2 opacity-80' : 'ring-4'} ring-offset-2 shadow-[0_0_25px_rgba(245,158,11,0.2)]`;
       }
     }
 
