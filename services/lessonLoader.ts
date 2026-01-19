@@ -3,7 +3,7 @@ import { Chapter, TutorialStep, Challenge, ScaleType } from '../types';
 
 export const loadLessons = async (): Promise<Chapter[]> => {
     try {
-        const response = await fetch('/lessons.md');
+        const response = await fetch('./lessons.md');
         if (!response.ok) {
             throw new Error('Failed to fetch lessons.md');
         }

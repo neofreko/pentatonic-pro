@@ -6,7 +6,7 @@ import { PENTATONIC_POSITIONS } from './data/positions'; // Imported from new da
 import Fretboard from './components/Fretboard';
 import { useSyllabus } from './hooks/useSyllabus';
 import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2 } from 'lucide-react';
-import { playNote } from './utils/audio';
+import { playNote, setAudioPreset } from './utils/audio';
 
 type FretMarkerType = 'number' | 'note';
 
@@ -18,6 +18,12 @@ const App: React.FC = () => {
   const [fretMarkerType, setFretMarkerType] = useState<FretMarkerType>('number');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [isPlayingScale, setIsPlayingScale] = useState(false);
+  const [audioPreset, setAudioPresetState] = useState<'clean' | 'crunch' | 'dreamy'>('clean');
+
+  const handlePresetChange = (preset: 'clean' | 'crunch' | 'dreamy') => {
+    setAudioPresetState(preset);
+    setAudioPreset(preset);
+  };
 
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const activeNoteTimeoutRef = useRef<number | null>(null);
@@ -305,7 +311,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {phase === 'PREVIEW' && (
+          {phase === 'PREVIEW' && currentChapter && (
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-slate-900/40 border border-slate-800/50 rounded-[2.5rem] p-12 relative overflow-hidden shadow-3xl">
                 <div className="absolute -top-24 -right-24 w-96 h-96 bg-amber-500/5 blur-[120px] rounded-full" />
@@ -374,6 +380,27 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 shadow-2xl">
+                      <button
+                        onClick={() => handlePresetChange('clean')}
+                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${audioPreset === 'clean' ? 'bg-amber-500 text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        Clean
+                      </button>
+                      <button
+                        onClick={() => handlePresetChange('crunch')}
+                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${audioPreset === 'crunch' ? 'bg-amber-500 text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        Crunch
+                      </button>
+                      <button
+                        onClick={() => handlePresetChange('dreamy')}
+                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${audioPreset === 'dreamy' ? 'bg-amber-500 text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        Space
+                      </button>
+                    </div>
+
+                    <div className="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 shadow-2xl">
                       <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-3 hidden sm:block">Box Position</label>
                       <div className="flex gap-1">
                         {[1, 2, 3, 4, 5].map(p => (
@@ -428,34 +455,36 @@ const App: React.FC = () => {
                 />
               </section>
 
-              {phase === 'LEARNING' && (
-                <div className="bg-slate-900/30 border border-slate-800/60 rounded-3xl overflow-hidden animate-in slide-in-from-bottom-8 duration-700 delay-150 shadow-3xl">
-                  <div className="p-5 border-b border-slate-800/60 flex items-center justify-between bg-slate-900/50 backdrop-blur-sm">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-3"><Activity className="w-4 h-4 text-amber-500" /> Lesson: Triplets on 2-Note Strings</h4>
-                    <button onClick={fetchLesson} className="p-2 hover:bg-slate-800 rounded-xl text-slate-500 transition-all hover:text-amber-500"><Sparkles className="w-4 h-4" /></button>
-                  </div>
-                  <div className="p-10 prose prose-invert prose-sm max-w-none min-h-[250px] font-medium leading-relaxed selection:bg-amber-500/20">
-                    {loadingLesson ? (
-                      <div className="flex flex-col items-center py-24 gap-6">
-                        <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden relative border border-slate-700">
-                          <div className="absolute inset-0 bg-amber-500 animate-[loading_1.5s_infinite] shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
+              {
+                phase === 'LEARNING' && (
+                  <div className="bg-slate-900/30 border border-slate-800/60 rounded-3xl overflow-hidden animate-in slide-in-from-bottom-8 duration-700 delay-150 shadow-3xl">
+                    <div className="p-5 border-b border-slate-800/60 flex items-center justify-between bg-slate-900/50 backdrop-blur-sm">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-3"><Activity className="w-4 h-4 text-amber-500" /> Lesson: Triplets on 2-Note Strings</h4>
+                      <button onClick={fetchLesson} className="p-2 hover:bg-slate-800 rounded-xl text-slate-500 transition-all hover:text-amber-500"><Sparkles className="w-4 h-4" /></button>
+                    </div>
+                    <div className="p-10 prose prose-invert prose-sm max-w-none min-h-[250px] font-medium leading-relaxed selection:bg-amber-500/20">
+                      {loadingLesson ? (
+                        <div className="flex flex-col items-center py-24 gap-6">
+                          <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden relative border border-slate-700">
+                            <div className="absolute inset-0 bg-amber-500 animate-[loading_1.5s_infinite] shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
+                          </div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 animate-pulse">Calculating Triplet Groups...</p>
                         </div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 animate-pulse">Calculating Triplet Groups...</p>
-                      </div>
-                    ) : (
-                      <div className="text-slate-400 whitespace-pre-wrap leading-loose">{lesson}</div>
-                    )}
+                      ) : (
+                        <div className="text-slate-400 whitespace-pre-wrap leading-loose">{lesson}</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )
+              }
+            </div >
           )}
-        </main>
-      </div>
+        </main >
+      </div >
       <footer className="max-w-7xl mx-auto w-full mt-auto py-12 border-t border-slate-900 text-center">
         <div className="flex items-center justify-center gap-2 text-slate-600 font-bold uppercase tracking-[0.3em] text-[10px]"><Music className="w-3 h-3" /> Pentatonic Pro <span className="text-slate-800">•</span> Visual Theory Engine</div>
       </footer>
-    </div>
+    </div >
   );
 };
 
