@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { NOTES, MIDI_TUNING, TUNING, PENTATONIC_POSITIONS } from './constants';
 import { ScaleType, Chapter, TutorialStep } from './types';
@@ -66,9 +65,7 @@ const App: React.FC = () => {
     return ids;
   }, [rootNote, scaleType, currentPosition]);
 
-  // EXERCISE GENERATOR: "Sequence of 3" (R-b3-4, b3-4-5...)
   const fullSequence = useMemo(() => {
-    // 1. Get all notes in this box and sort them by pitch
     const notesInBox = Array.from(currentPositionNoteIds).map((id: string) => {
       const [s, f] = id.split('-').map(Number);
       return { s, f, midi: MIDI_TUNING[s] + f };
@@ -78,17 +75,21 @@ const App: React.FC = () => {
 
     const sequence: {s: number, f: number, midi: number, pair: number[], tripletIdx: number}[] = [];
     
-    // 2. Build the "Group of 3" pattern (Sliding window of 3)
+    // ASCENDING TRIPLET GROUPS (1-2-3, 2-3-4, etc.)
     for (let i = 0; i < notesInBox.length - 2; i++) {
       const triplet = [notesInBox[i], notesInBox[i+1], notesInBox[i+2]];
       const activeStrings = Array.from(new Set(triplet.map(n => n.s)));
-      
       triplet.forEach((note, idx) => {
-        sequence.push({
-          ...note,
-          pair: activeStrings,
-          tripletIdx: idx + 1
-        });
+        sequence.push({ ...note, pair: activeStrings, tripletIdx: idx + 1 });
+      });
+    }
+
+    // DESCENDING TRIPLET GROUPS (Top-Middle-Bottom, Middle-Bottom-Next, etc.)
+    for (let i = notesInBox.length - 1; i >= 2; i--) {
+      const triplet = [notesInBox[i], notesInBox[i-1], notesInBox[i-2]];
+      const activeStrings = Array.from(new Set(triplet.map(n => n.s)));
+      triplet.forEach((note, idx) => {
+        sequence.push({ ...note, pair: activeStrings, tripletIdx: idx + 1 });
       });
     }
 
@@ -357,6 +358,23 @@ const App: React.FC = () => {
                      </div>
                      
                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 shadow-2xl">
+                           <button 
+                             onClick={() => setFretMarkerType('number')}
+                             className={`p-2.5 rounded-xl transition-all ${fretMarkerType === 'number' ? 'bg-amber-500 text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                             title="Fret Numbers"
+                           >
+                              <Hash className="w-4 h-4" />
+                           </button>
+                           <button 
+                             onClick={() => setFretMarkerType('note')}
+                             className={`p-2.5 rounded-xl transition-all ${fretMarkerType === 'note' ? 'bg-amber-500 text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                             title="Fret Notes"
+                           >
+                              <TypeIcon className="w-4 h-4" />
+                           </button>
+                        </div>
+
                         <div className="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 shadow-2xl">
                           <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-3 hidden sm:block">Box Position</label>
                           <div className="flex gap-1">

@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { FRET_COUNT, MIDI_TUNING } from '../constants';
 import { ScaleType } from '../types';
@@ -34,36 +33,36 @@ const Fretboard: React.FC<FretboardProps> = ({
   errorNoteId = null,
   highlightInterval = null
 }) => {
-  const strings = [0, 1, 2, 3, 4, 5]; // High E to Low E
+  const strings = [0, 1, 2, 3, 4, 5]; 
   const stringNotes = ['E', 'B', 'G', 'D', 'A', 'E'];
 
   /**
-   * VIBRANT INTERVAL COLOR PALETTE
-   * All notes now use these high-saturation backgrounds to ensure 
-   * they "pop" as much as the Root note.
+   * SOLID COLOR ENGINE
+   * We use specific solid fills for dimmed vs active states.
+   * NO TRANSPARENCY is used on scale notes.
    */
-  const getIntervalColor = (interval: string) => {
+  const getIntervalColor = (interval: string, isDimmed: boolean) => {
+    if (isDimmed) return 'bg-slate-800 ring-slate-800 text-slate-500';
+    
     switch (interval) {
-      case 'R': return 'bg-amber-400 ring-amber-300'; // Vibrant Gold
+      case 'R': return 'bg-amber-400 ring-amber-400 text-slate-950'; // SOLID YELLOW
       case 'b3':
-      case '3': return 'bg-emerald-400 ring-emerald-300'; // Vibrant Green
-      case '4': return 'bg-sky-400 ring-sky-300'; // Sky Blue
-      case '5': return 'bg-indigo-400 ring-indigo-300'; // Rich Violet
+      case '3': return 'bg-emerald-400 ring-emerald-300 text-slate-950';
+      case '4': return 'bg-sky-400 ring-sky-300 text-slate-950';
+      case '5': return 'bg-indigo-400 ring-indigo-300 text-slate-950';
       case 'b7':
-      case '7': return 'bg-rose-400 ring-rose-300'; // Rose Pink
-      case '2': return 'bg-orange-400 ring-orange-300'; // Orange
-      case '6': return 'bg-fuchsia-400 ring-fuchsia-300'; // Pink
-      default: return 'bg-slate-100 ring-slate-200';
+      case '7': return 'bg-rose-400 ring-rose-300 text-slate-950';
+      case '2': return 'bg-orange-400 ring-orange-300 text-slate-950';
+      case '6': return 'bg-fuchsia-400 ring-fuchsia-300 text-slate-950';
+      default: return 'bg-slate-100 ring-slate-200 text-slate-950';
     }
   };
 
-  const getNoteAppearance = (interval: string, isRoot: boolean, isInPosition: boolean, isCurrentlyPlaying: boolean, isSuccess: boolean, isError: boolean) => {
-    // Shared base structure for all notes
-    let base = "w-12 h-12 rounded-full flex flex-col items-center justify-center transition-all duration-300 relative border-none cursor-pointer shadow-xl ring-2 ring-offset-2 ring-offset-[#0d121f]";
-    let colors = "";
+  const getNoteAppearance = (interval: string, isRoot: boolean, isInPosition: boolean, isCurrentlyPlaying: boolean, isSuccess: boolean, isError: boolean, isDimmed: boolean) => {
+    let base = "w-11 h-11 rounded-full flex flex-col items-center justify-center transition-all duration-300 relative border-none cursor-pointer shadow-xl ring-2 ring-offset-2 ring-offset-[#0d121f]";
+    let colors = getIntervalColor(interval, isDimmed);
     let effects = "";
 
-    // 1. Interaction States (Feedback)
     if (isCurrentlyPlaying) {
       colors = "bg-white text-slate-950 ring-white scale-125 z-[100] ring-offset-4";
       effects = "shadow-[0_0_50px_rgba(255,255,255,0.7)]";
@@ -73,25 +72,16 @@ const Fretboard: React.FC<FretboardProps> = ({
     } else if (isError) {
       colors = "bg-red-500 text-white ring-red-400 scale-110 z-30 animate-shake";
       effects = "shadow-[0_0_20px_rgba(239,68,68,0.5)]";
-    } 
-    // 2. Scale Styling (The Core Readability Fix)
-    else {
-      const intervalStyles = getIntervalColor(interval);
-      
+    } else {
       if (isInPosition) {
-        // Active Box notes: Maximum pop and size
-        colors = `${intervalStyles} text-slate-950 scale-110 z-20`;
-        effects = `shadow-[0_12px_30px_rgba(0,0,0,0.7)] ${isRoot ? 'shadow-amber-500/40' : ''}`;
+        effects += " scale-110 z-20 shadow-[0_12px_30px_rgba(0,0,0,0.7)]";
       } else {
-        // Notes outside the box (e.g. frets 3-7): 
-        // We keep the solid color for readability but remove the extra scale/glow
-        colors = `${intervalStyles} text-slate-950 scale-100 z-10`;
-        effects = "shadow-lg opacity-90";
+        effects += " shadow-lg";
       }
 
-      // Specific highlight for the Root note to keep it distinct from other colors
+      // Root note gets a thick white ring for extra focus, even when dimmed (at reduced scale)
       if (isRoot) {
-        effects += " ring-white/50 ring-4";
+        effects += ` ring-white ${isDimmed ? 'ring-2' : 'ring-4'} ring-offset-2 shadow-[0_0_25px_rgba(245,158,11,0.3)]`;
       }
     }
 
@@ -128,7 +118,7 @@ const Fretboard: React.FC<FretboardProps> = ({
     if (singleInlays.includes(fret)) return <div className={markerClass} />;
     if (doubleInlays.includes(fret)) {
       return (
-        <div className="flex flex-col gap-14">
+        <div className="flex flex-col gap-16">
           <div className={markerClass} />
           <div className={markerClass} />
         </div>
@@ -140,8 +130,7 @@ const Fretboard: React.FC<FretboardProps> = ({
   return (
     <div className="w-full overflow-x-auto bg-[#0a0f1d] p-10 rounded-[3rem] border border-slate-800/50 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)] relative">
       <div className="flex min-w-[1200px]">
-        {/* String Indicators */}
-        <div className="w-12 flex flex-col justify-between py-10 mr-12">
+        <div className="w-12 flex flex-col justify-between py-12 mr-12">
            {stringNotes.map((note, i) => {
              const isStringActive = activeStrings ? activeStrings.includes(i) : true;
              return (
@@ -153,7 +142,6 @@ const Fretboard: React.FC<FretboardProps> = ({
         </div>
 
         <div className="flex-grow flex flex-col">
-          {/* Fret Numbers (Top) */}
           <div className="flex mb-10 px-0">
             {Array.from({ length: FRET_COUNT + 1 }).map((_, f) => (
               <div key={`top-num-${f}`} className="flex-1 text-center text-[13px] text-slate-500 font-black tracking-widest uppercase">
@@ -162,11 +150,10 @@ const Fretboard: React.FC<FretboardProps> = ({
             ))}
           </div>
 
-          <div className="relative h-[24rem] flex rounded-[3rem] overflow-hidden border border-slate-800/80 bg-[#0d121f] shadow-[inset_0_4px_80px_rgba(0,0,0,1)]">
-            {/* Box Position Highlight Background */}
+          <div className="relative h-[26rem] flex rounded-[3rem] overflow-hidden border border-slate-800/80 bg-[#0d121f] shadow-[inset_0_4px_80px_rgba(0,0,0,1)]">
             {boxRange && (
               <div 
-                className="absolute h-full bg-white/[0.05] border-x border-white/10 z-0 transition-all duration-700 ease-in-out"
+                className="absolute h-full bg-white/[0.03] border-x border-white/5 z-0 transition-all duration-700"
                 style={{
                   left: `${(boxRange.min / (FRET_COUNT + 1)) * 100}%`,
                   width: `${((boxRange.max - boxRange.min + 1) / (FRET_COUNT + 1)) * 100}%`
@@ -174,7 +161,6 @@ const Fretboard: React.FC<FretboardProps> = ({
               />
             )}
 
-            {/* Inlays */}
             <div className="absolute inset-0 flex items-center justify-around pointer-events-none z-0">
               {Array.from({ length: FRET_COUNT + 1 }).map((_, f) => (
                 <div key={`inlay-${f}`} className="flex-1 flex items-center justify-center">
@@ -183,14 +169,13 @@ const Fretboard: React.FC<FretboardProps> = ({
               ))}
             </div>
 
-            <div className="flex-1 flex flex-col justify-between relative z-10 py-6">
+            <div className="flex-1 flex flex-col justify-between relative z-10 py-8">
               {strings.map((s) => {
                 const isStringActive = activeStrings ? activeStrings.includes(s) : true;
                 return (
-                  <div key={`string-${s}`} className={`relative h-full flex items-center transition-all duration-300 ${isStringActive ? 'opacity-100' : 'opacity-10'}`}>
-                    {/* Guitar Strings Visualization */}
+                  <div key={`string-${s}`} className="relative h-full flex items-center transition-all duration-300">
                     <div className="absolute w-full h-[1px] bg-black/90 translate-y-[3px]" style={{ height: `${1 + s * 0.6}px` }} />
-                    <div className="absolute w-full h-[2.5px] bg-gradient-to-b from-slate-400 via-slate-500 to-slate-800 shadow-xl" style={{ height: `${1 + s * 0.6}px` }} />
+                    <div className="absolute w-full h-[2.5px] bg-gradient-to-b from-slate-400 via-slate-500 to-slate-800" style={{ height: `${1 + s * 0.6}px` }} />
                     
                     <div className="flex-1 flex justify-around h-full">
                       {Array.from({ length: FRET_COUNT + 1 }).map((_, f) => {
@@ -206,50 +191,29 @@ const Fretboard: React.FC<FretboardProps> = ({
                         
                         const isHighlighted = !highlightInterval || interval === highlightInterval;
                         const shouldDim = (!isHighlighted && active) || !isStringActive;
-                        
-                        // We reduced the dimming factor to keep notes outside the highlight visible but distinct
-                        const containerOpacity = shouldDim ? 'opacity-40 grayscale-[0.3]' : 'opacity-100';
-
-                        // High-Contrast Solid Label Design
-                        const labelContent = (
-                          <div className="flex flex-col items-center justify-center -space-y-1.5 pointer-events-none">
-                            <span className="text-[20px] font-black leading-none tracking-tighter">
-                              {interval}
-                            </span>
-                            <div className="w-7 h-[3px] bg-black/20 my-2 rounded-full" />
-                            <span className="text-[12px] font-black uppercase leading-none tracking-tighter opacity-80">
-                              {noteName}
-                            </span>
-                          </div>
-                        );
 
                         return (
-                          <div key={`note-${s}-${f}`} className={`flex-1 flex items-center justify-center relative transition-all duration-300 ${containerOpacity}`}>
-                            {/* Fret Line */}
-                            <div className={`absolute right-0 top-0 bottom-0 w-[2px] h-full ${f === 0 ? 'bg-amber-100/40 w-[5px]' : 'bg-slate-800/80'}`} />
+                          <div key={`note-${s}-${f}`} className="flex-1 flex items-center justify-center relative transition-all duration-300">
+                            <div className={`absolute right-0 top-0 bottom-0 w-[2px] h-full ${f === 0 ? 'bg-amber-100/40 w-[6px]' : 'bg-slate-800/80'}`} />
                             
                             {active && (
                               <div className="relative">
                                 {isCurrentlyPlaying && (
-                                  <div className="absolute inset-0 -m-12 border-[6px] border-white/40 rounded-full animate-ping z-0 pointer-events-none" />
+                                  <div className="absolute inset-0 -m-10 border-[6px] border-white/40 rounded-full animate-ping z-0 pointer-events-none" />
                                 )}
                                 
                                 <button 
                                   onClick={() => handleNoteClick(s, f, noteName, interval)} 
-                                  className={getNoteAppearance(interval, isRoot, !!isInPosition, !!isCurrentlyPlaying, !!isSuccess, !!isError)}
+                                  className={getNoteAppearance(interval, isRoot, !!isInPosition, !!isCurrentlyPlaying, !!isSuccess, !!isError, shouldDim)}
                                 >
-                                  {(hideLabels && !isSuccess && !isCurrentlyPlaying) ? '' : labelContent}
-                                </button>
-
-                                {/* Active Playing Tooltip */}
-                                {isCurrentlyPlaying && (
-                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-10 z-[110] animate-in fade-in zoom-in slide-in-from-bottom-6 duration-300 pointer-events-none">
-                                    <div className="bg-white text-slate-950 px-7 py-4 rounded-2xl font-black text-[16px] whitespace-nowrap shadow-[0_25px_60px_rgba(0,0,0,0.6)] border-2 border-amber-500 uppercase tracking-tight flex items-center gap-4">
-                                      <span className="w-4 h-4 bg-amber-500 rounded-full animate-pulse shadow-[0_0_20px_rgba(245,158,11,1)]" />
-                                      {noteName} <span className="text-slate-300 font-bold">|</span> {interval}
+                                  {(!hideLabels || isSuccess || isCurrentlyPlaying) && (
+                                    <div className="flex flex-col items-center justify-center -space-y-1.5 pointer-events-none">
+                                      <span className="text-[18px] font-black tracking-tighter">
+                                        {showIntervals ? interval : noteName}
+                                      </span>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
+                                </button>
                               </div>
                             )}
                           </div>
@@ -262,7 +226,6 @@ const Fretboard: React.FC<FretboardProps> = ({
             </div>
           </div>
           
-          {/* Fret Numbers (Bottom) */}
           <div className="flex mt-10 opacity-20">
             {Array.from({ length: FRET_COUNT + 1 }).map((_, f) => (
               <div key={`bottom-num-${f}`} className="flex-1 text-center text-[11px] text-slate-500 font-black tracking-widest uppercase">
