@@ -10,8 +10,8 @@ Pentatonic Pro is a specialized guitar pedagogy application that bridges abstrac
 
 - **Framework:** React 19.2.3 with TypeScript
 - **Build Tool:** Vite 6.2.0
-- **Testing:** Vitest with @testing-library/jest-dom
-- **Package Manager:** Bun (preferred for speed)
+- **Testing:** Vitest (tests exist but test infrastructure needs to be set up in package.json)
+- **Package Manager:** npm or bun
 - **AI Integration:** Google Gemini AI (@google/genai)
 - **Icons:** Lucide React
 - **Deployment:** GitHub Pages
@@ -53,19 +53,16 @@ Pentatonic Pro is a specialized guitar pedagogy application that bridges abstrac
 
 ```bash
 # Development server (runs on port 3000)
-bun run dev
+npm run dev
 
 # Production build
-bun run build
+npm run build
 
 # Preview production build
-bun run preview
+npm run preview
 
-# Run all tests
-bun test
-
-# Run tests in watch mode
-bun test --watch
+# Note: Test scripts need to be added to package.json
+# Test files exist in utils/ and hooks/ directories using Vitest
 ```
 
 ## Code Style & Conventions
@@ -105,7 +102,7 @@ bun test --watch
 
 - `GEMINI_API_KEY`: Required for AI tutor functionality
 - Set in `.env` file (not committed)
-- Accessed via `process.env.GEMINI_API_KEY` in code
+- Accessed via `process.env.API_KEY` or `process.env.GEMINI_API_KEY` in code (both are defined in vite.config.ts)
 
 ## Project Structure
 
@@ -149,6 +146,9 @@ bun test --watch
 
 ## Testing Guidelines
 
+- Test files exist using Vitest framework (`.test.ts` extension)
+- Test setup file: `vitest-setup.ts` (imports @testing-library/jest-dom)
+- **Note:** Test scripts need to be added to package.json to run tests
 - Follow Test-Driven Development (TDD) cycle:
   1. **Red:** Write failing test first
   2. **Green:** Write minimum code to pass
