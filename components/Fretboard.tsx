@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { FRET_COUNT, MIDI_TUNING } from '../constants';
 import { ScaleType } from '../types';
 import { getNoteAtPosition, isNoteInScale, getIntervalName } from '../utils/musicLogic';
@@ -35,6 +35,30 @@ const Fretboard: React.FC<FretboardProps> = ({
 }) => {
   const strings = [0, 1, 2, 3, 4, 5]; 
   const stringNotes = ['E', 'B', 'G', 'D', 'A', 'E'];
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Center the fretboard scroll position on mobile devices for better UX
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (scrollContainer) {
+      // Check if we're on a mobile/small viewport
+      const isMobile = window.innerWidth < 768; // md breakpoint
+      
+      if (isMobile) {
+        // Calculate the center scroll position
+        // We want to center the viewport on the fretboard content
+        const scrollWidth = scrollContainer.scrollWidth;
+        const clientWidth = scrollContainer.clientWidth;
+        const centerPosition = (scrollWidth - clientWidth) / 2;
+        
+        // Scroll to center position smoothly
+        scrollContainer.scrollTo({
+          left: centerPosition,
+          behavior: 'smooth'
+        });
+      }
+    }
+  }, [rootNote, scaleType]); // Re-center when root note or scale type changes
 
   /**
    * SOLID COLOR ENGINE
@@ -128,7 +152,10 @@ const Fretboard: React.FC<FretboardProps> = ({
   };
 
   return (
-    <div className="w-full overflow-x-auto bg-[#0a0f1d] p-10 rounded-[3rem] border border-slate-800/50 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)] relative">
+    <div 
+      ref={scrollContainerRef}
+      className="w-full overflow-x-auto bg-[#0a0f1d] p-10 rounded-[3rem] border border-slate-800/50 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)] relative scroll-smooth"
+    >
       <div className="flex min-w-[1200px]">
         <div className="w-12 flex flex-col justify-between py-12 mr-12">
            {stringNotes.map((note, i) => {
