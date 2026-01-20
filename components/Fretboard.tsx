@@ -40,18 +40,23 @@ const Fretboard: React.FC<FretboardProps> = ({
   // Center the fretboard scroll position on mobile devices for better UX
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
-    if (scrollContainer) {
-      // Check if we're on a mobile/small viewport
-      const isMobile = window.innerWidth < 768; // md breakpoint
+    if (!scrollContainer || typeof window === 'undefined') return;
+    
+    // Check if we're on a mobile/small viewport
+    const isMobile = window.innerWidth < 768; // md breakpoint
+    
+    if (isMobile) {
+      // Calculate the center scroll position
+      // We want to center the viewport on the fretboard content
+      const scrollWidth = scrollContainer.scrollWidth;
+      const clientWidth = scrollContainer.clientWidth;
+      const centerPosition = (scrollWidth - clientWidth) / 2;
       
-      if (isMobile) {
-        // Calculate the center scroll position
-        // We want to center the viewport on the fretboard content
-        const scrollWidth = scrollContainer.scrollWidth;
-        const clientWidth = scrollContainer.clientWidth;
-        const centerPosition = (scrollWidth - clientWidth) / 2;
-        
-        // Scroll to center position smoothly
+      // Only scroll if we're not already near the center to avoid unnecessary animations
+      const currentScroll = scrollContainer.scrollLeft;
+      const scrollDifference = Math.abs(currentScroll - centerPosition);
+      
+      if (scrollDifference > 50) { // Only re-center if significantly off-center
         scrollContainer.scrollTo({
           left: centerPosition,
           behavior: 'smooth'
