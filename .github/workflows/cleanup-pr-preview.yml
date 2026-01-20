@@ -1,0 +1,66 @@
+name: Cleanup PR Preview
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  cleanup-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+        continue-on-error: true
+        id: checkout_gh_pages
+
+      - name: Remove PR preview directory
+        run: |
+          # Check if gh-pages branch exists
+          if [ "${{ steps.checkout_gh_pages.outcome }}" != "success" ]; then
+            echo "gh-pages branch doesn't exist yet, nothing to clean up"
+            exit 0
+          fi
+          
+          # Check if PR directory exists
+          if [ -d "pr-${{ github.event.pull_request.number }}" ]; then
+            # Remove PR-specific directory
+            rm -rf pr-${{ github.event.pull_request.number }}
+            
+            # Configure git
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            
+            # Commit and push changes
+            git add -A
+            if git diff --staged --quiet; then
+              echo "No changes to commit"
+            else
+              git commit -m "Remove preview for PR #${{ github.event.pull_request.number }}"
+              git push origin gh-pages
+            fi
+          else
+            echo "PR preview directory pr-${{ github.event.pull_request.number }} not found, nothing to clean up"
+          fi
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            
+            const comment = `## 🧹 Preview Cleanup
+            
+            The preview deployment for this PR has been removed.`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: comment,
+            });

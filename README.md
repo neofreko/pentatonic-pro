@@ -35,3 +35,17 @@ To add a new chapter:
 1. Define the structure in `types.ts`.
 2. Add a new object to the `CHAPTERS` array in `data/chapters.ts`.
 3. The UI will automatically detect the new chapter and update the Syllabus sidebar.
+
+## 6. Development & Deployment
+
+### PR Preview Deployments
+This repository is configured to automatically deploy PR previews to GitHub Pages:
+- **Automatic**: Every pull request gets its own preview deployment
+- **URL Format**: `https://neofreko.github.io/pentatonic-pro/pr-{number}/`
+- **Updates**: Previews update automatically when you push new changes
+- **Cleanup**: Previews are automatically removed when PRs are closed or merged
+
+When you open a PR, the GitHub Actions bot will comment with the preview URL, making it easy for reviewers to test changes before merging.
+
+### Main Deployment
+The main production deployment happens automatically when changes are merged to the `main` branch and is available at: [https://neofreko.github.io/pentatonic-pro/](https://neofreko.github.io/pentatonic-pro/)

@@ -1,0 +1,107 @@
+name: Deploy PR Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+      
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build with PR-specific base path
+        run: bun run build
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_BASE_PATH: /pentatonic-pro/pr-${{ github.event.pull_request.number }}/
+
+      - name: Deploy to gh-pages
+        run: |
+          # Save the built dist directory
+          cp -r dist /tmp/pr-build
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Fetch and checkout gh-pages
+          git fetch origin gh-pages || echo "gh-pages branch doesn't exist yet"
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . || true
+            echo "# GitHub Pages" > README.md
+            git add README.md
+            git commit -m "Initialize gh-pages branch"
+          fi
+          
+          # Create PR-specific directory and copy build
+          mkdir -p pr-${{ github.event.pull_request.number }}
+          cp -r /tmp/pr-build/* pr-${{ github.event.pull_request.number }}/
+          
+          # Commit and push changes
+          git add pr-${{ github.event.pull_request.number }}
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Deploy preview for PR #${{ github.event.pull_request.number }}"
+            git push origin gh-pages
+          fi
+
+      - name: Comment PR with preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const previewUrl = `https://neofreko.github.io/pentatonic-pro/pr-${prNumber}/`;
+            
+            const comment = `## 🚀 Preview Deployment
+            
+            Your PR preview has been deployed!
+            
+            **Preview URL:** ${previewUrl}
+            
+            The preview will be updated automatically when you push new changes.`;
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Preview Deployment')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: comment,
+              });
+            }
