@@ -33,8 +33,8 @@ jobs:
 
       - name: Build
         run: bun run build
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        # Security: API key environment variable removed
+        # Gemini AI integration is disabled in production builds
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
