@@ -1,5 +1,7 @@
 # Pentatonic Pro: Technical Documentation
 
+**Live Demo:** [https://neofreko.github.io/pentatonic-pro/](https://neofreko.github.io/pentatonic-pro/)
+
 ## 1. Project Overview
 Pentatonic Pro is a specialized guitar pedagogy application designed to bridge the gap between abstract theory and fretboard muscle memory. It uses a combination of a deterministic music logic engine and a generative AI tutor (Gemini).
 
