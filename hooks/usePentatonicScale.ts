@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { NOTES, TUNING, PENTATONIC_POSITIONS } from '../constants';
+import { NOTES, TUNING } from '../constants';
+import { PENTATONIC_POSITIONS } from '../data/positions';
 import { ScaleType } from '../types';
 
 export const usePentatonicScale = (initialRoot = 'A', initialScale: ScaleType = 'minor') => {

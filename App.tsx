@@ -1,19 +1,61 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { NOTES, MIDI_TUNING, TUNING } from './constants';
+import { NOTES, MIDI_TUNING, TUNING, FRET_COUNT } from './constants';
 import { ScaleType, TutorialStep } from './types';
 import { PENTATONIC_POSITIONS } from './data/positions'; // Imported from new data file
 import Fretboard from './components/Fretboard';
 import { useSyllabus } from './hooks/useSyllabus';
-import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2 } from 'lucide-react';
+import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2, Settings, X, Key, Lock, LogOut } from 'lucide-react';
 import { playNote, setAudioPreset } from './utils/audio';
+import { getIntervalName, getNoteAtPosition } from './utils/musicLogic';
+import { initiateOpenRouterLogin, handleOpenRouterCallback } from './utils/openRouterAuth';
 
 type FretMarkerType = 'number' | 'note';
 
 const App: React.FC = () => {
-  const [rootNote, setRootNote] = useState('A');
-  const [scaleType, setScaleType] = useState<ScaleType>('minor');
-  const [currentPosition, setCurrentPosition] = useState<number>(1);
+  const [rootNote, setRootNote] = useState(() => localStorage.getItem('root_note') || 'A');
+  const [scaleType, setScaleType] = useState<ScaleType>(() => (localStorage.getItem('scale_type') as ScaleType) || 'minor');
+  const [currentPosition, setCurrentPosition] = useState<number>(() => {
+    const saved = localStorage.getItem('current_position');
+    return saved ? parseInt(saved, 10) : 1;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('root_note', rootNote);
+  }, [rootNote]);
+
+  useEffect(() => {
+    localStorage.setItem('scale_type', scaleType);
+  }, [scaleType]);
+
+  useEffect(() => {
+    localStorage.setItem('current_position', currentPosition.toString());
+  }, [currentPosition]);
+
+  // Migrate deprecated models
+  useEffect(() => {
+    const savedModel = localStorage.getItem('openrouter_model');
+    if (savedModel === 'google/gemini-flash-1.5' || savedModel === 'google/gemini-pro-1.5') {
+      const newModel = savedModel === 'google/gemini-flash-1.5' ? 'google/gemini-2.0-flash-001' : 'google/gemini-2.5-pro';
+      localStorage.setItem('openrouter_model', newModel);
+      setTempModel(newModel);
+    }
+  }, []);
+  useEffect(() => {
+    const checkAuth = async () => {
+      const result = await handleOpenRouterCallback();
+      if (result?.success) {
+        setTempApiKey(result.key || '');
+        setTestResult({ success: true, message: "Logged in via OpenRouter!" });
+        setShowSettings(true);
+      } else if (result?.error) {
+        setTestResult({ success: false, message: result.error });
+        setShowSettings(true);
+      }
+    };
+    checkAuth();
+  }, []);
+
   const [showIntervals, setShowIntervals] = useState(true);
   const [fretMarkerType, setFretMarkerType] = useState<FretMarkerType>('number');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
@@ -52,6 +94,54 @@ const App: React.FC = () => {
   const [errorNoteId, setErrorNoteId] = useState<string | null>(null);
   const [challengeComplete, setChallengeComplete] = useState(false);
 
+  useEffect(() => {
+    if (currentChapter?.id) {
+      const saved = localStorage.getItem(`challenge_progress_${currentChapter.id}`);
+      if (saved) {
+        const ids = JSON.parse(saved);
+        setSuccessNoteIds(ids);
+        if (currentChapter.challenge && ids.length >= currentChapter.challenge.requiredCount) {
+          setChallengeComplete(true);
+        } else {
+          setChallengeComplete(false);
+        }
+      } else {
+        setSuccessNoteIds([]);
+        setChallengeComplete(false);
+      }
+    }
+  }, [currentChapter?.id]);
+
+  useEffect(() => {
+    if (currentChapter?.id && successNoteIds.length > 0) {
+      localStorage.setItem(`challenge_progress_${currentChapter.id}`, JSON.stringify(successNoteIds));
+    }
+  }, [successNoteIds, currentChapter?.id]);
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [tempApiKey, setTempApiKey] = useState(localStorage.getItem('openrouter_api_key') || '');
+  const [tempModel, setTempModel] = useState(localStorage.getItem('openrouter_model') || 'google/gemini-2.0-flash-001');
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
+  const handleTestConnection = async () => {
+    if (!tempApiKey) {
+      setTestResult({ success: false, message: "Please enter an API key first." });
+      return;
+    }
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const { testOpenRouterConnection } = await import('./services/aiService');
+      const result = await testOpenRouterConnection(tempApiKey, tempModel);
+      setTestResult(result);
+    } catch (error: any) {
+      setTestResult({ success: false, message: error.message });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   const currentPositionNoteIds = useMemo(() => {
     const rootIdx = NOTES.indexOf(rootNote);
     const lowEOpenIdx = TUNING[5];
@@ -64,7 +154,8 @@ const App: React.FC = () => {
       frets.forEach(fOffset => {
         let f = baseFret + fOffset;
         while (f < 0) f += 12;
-        while (f > 24) f -= 12;
+        // Wrap notes to stay within the visible fretboard (0 to FRET_COUNT)
+        while (f > FRET_COUNT) f -= 12;
         ids.add(`${sIdx}-${f}`);
       });
     });
@@ -169,22 +260,49 @@ const App: React.FC = () => {
     setPhase('PREVIEW');
   };
 
+  const [hintNoteId, setHintNoteId] = useState<string | null>(null);
+
+  const activateHint = () => {
+    if (!currentChapter?.challenge) return;
+    const target = currentChapter.challenge.targetInterval;
+
+    // Find candidates that are currently within the visible fretboard
+    const candidates = Array.from(currentPositionNoteIds).filter(id => {
+      if (successNoteIds.includes(id)) return false; // Already found
+      const [s, f] = id.split('-').map(Number);
+      if (f > FRET_COUNT) return false; // Extra safety check
+
+      const noteName = getNoteAtPosition(s, f);
+      const interval = getIntervalName(noteName, rootNote, scaleType);
+      return interval === target;
+    });
+
+    if (candidates.length > 0) {
+      // Pick random
+      const randomId = candidates[Math.floor(Math.random() * candidates.length)];
+      setHintNoteId(randomId);
+    }
+  };
+
   const handleNoteClick = (s: number, f: number, noteName: string, interval: string) => {
     const noteId = `${s}-${f}`;
     setActiveNoteId(noteId);
     if (activeNoteTimeoutRef.current) window.clearTimeout(activeNoteTimeoutRef.current);
     activeNoteTimeoutRef.current = window.setTimeout(() => setActiveNoteId(null), 1000);
 
+    // Clear hint if they clicked it (or any note)
+    setHintNoteId(null);
+
     if (phase === 'CHALLENGE') {
       if (challengeComplete) return;
       if (successNoteIds.includes(noteId)) return;
 
-      if (interval === currentChapter.challenge.targetInterval) {
+      if (interval === currentChapter?.challenge?.targetInterval) {
         const newSuccess = [...successNoteIds, noteId];
         setSuccessNoteIds(newSuccess);
-        if (newSuccess.length >= currentChapter.challenge.requiredCount) {
+        if (currentChapter?.challenge && newSuccess.length >= currentChapter.challenge.requiredCount) {
           setChallengeComplete(true);
-          if (!completedChapters.includes(currentChapter.id)) {
+          if (currentChapter?.id && !completedChapters.includes(currentChapter.id)) {
             setCompletedChapters(prev => [...prev, currentChapter.id]);
           }
         }
@@ -204,6 +322,8 @@ const App: React.FC = () => {
       }
     }
   };
+
+  // ... (rest of helper functions)
 
   // selectChapter is now provided by useSyllabus hook
 
@@ -228,33 +348,177 @@ const App: React.FC = () => {
           <p className="text-slate-500 text-sm font-medium">Interactive fretboard and AI tutor for mastering scales.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 backdrop-blur-md">
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase tracking-widest text-slate-500 font-black px-1">Key</label>
-            <select
-              value={rootNote}
-              onChange={(e) => setRootNote(e.target.value)}
-              className="bg-slate-800 text-slate-100 border-none rounded-lg px-3 py-1.5 text-sm outline-none cursor-pointer focus:ring-1 focus:ring-amber-500 transition-all hover:bg-slate-700"
-            >
-              {NOTES.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
+        <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4 bg-slate-900/40 p-3 rounded-2xl border border-slate-800/50 backdrop-blur-md">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-widest text-slate-500 font-black px-1">Key</label>
+              <select
+                value={rootNote}
+                onChange={(e) => setRootNote(e.target.value)}
+                className="bg-slate-800 text-slate-100 border-none rounded-lg px-3 py-1.5 text-sm outline-none cursor-pointer focus:ring-1 focus:ring-amber-500 transition-all hover:bg-slate-700"
+              >
+                {NOTES.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1 border-l border-slate-800 pl-4">
+              <label className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Mode</label>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold transition-colors ${scaleType === 'minor' ? 'text-amber-500' : 'text-slate-600'}`}>Minor</span>
+                <button
+                  onClick={() => setScaleType(scaleType === 'minor' ? 'major' : 'minor')}
+                  className={`w-10 h-5 rounded-full p-1 transition-all ${scaleType === 'minor' ? 'bg-slate-700' : 'bg-amber-600'}`}
+                >
+                  <div className={`w-3 h-3 bg-white rounded-full transition-transform ${scaleType === 'major' ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+                <span className={`text-xs font-bold transition-colors ${scaleType === 'major' ? 'text-amber-500' : 'text-slate-600'}`}>Major</span>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1 border-l border-slate-800 pl-4">
-            <label className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Mode</label>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold transition-colors ${scaleType === 'minor' ? 'text-amber-500' : 'text-slate-600'}`}>Minor</span>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-3 bg-slate-900/40 border border-slate-800/50 rounded-2xl text-slate-400 hover:text-amber-500 transition-all hover:bg-slate-800 backdrop-blur-md"
+            title="AI Settings"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-3xl animate-in zoom-in-95 duration-300">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 rounded-lg">
+                  <Key className="w-5 h-5 text-amber-500" />
+                </div>
+                <h3 className="text-xl font-bold">AI Settings</h3>
+              </div>
               <button
-                onClick={() => setScaleType(scaleType === 'minor' ? 'major' : 'minor')}
-                className={`w-10 h-5 rounded-full p-1 transition-all ${scaleType === 'minor' ? 'bg-slate-700' : 'bg-amber-600'}`}
+                onClick={() => setShowSettings(false)}
+                className="p-2 hover:bg-slate-800 rounded-xl text-slate-500 transition-colors"
               >
-                <div className={`w-3 h-3 bg-white rounded-full transition-transform ${scaleType === 'major' ? 'translate-x-5' : 'translate-x-0'}`} />
+                <X className="w-5 h-5" />
               </button>
-              <span className={`text-xs font-bold transition-colors ${scaleType === 'major' ? 'text-amber-500' : 'text-slate-600'}`}>Major</span>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Authentication</label>
+                {tempApiKey ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        <span className="text-sm font-bold text-green-500">Authenticated</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          localStorage.removeItem('openrouter_api_key');
+                          setTempApiKey('');
+                          setTestResult(null);
+                        }}
+                        className="p-2 hover:bg-red-500/10 rounded-xl text-slate-500 hover:text-red-500 transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+                      >
+                        <LogOut className="w-4 h-4" /> Sign Out
+                      </button>
+                    </div>
+                    <div className="bg-slate-800/50 rounded-2xl px-5 py-4 border border-slate-800">
+                      <div className="text-[8px] font-black uppercase text-slate-600 mb-1">Active API Key</div>
+                      <div className="text-xs text-slate-400 font-mono truncate">{tempApiKey.substring(0, 10)}...{tempApiKey.substring(tempApiKey.length - 10)}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={initiateOpenRouterLogin}
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl py-4 flex items-center justify-center gap-3 font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-indigo-600/20 group"
+                  >
+                    <div className="p-1.5 bg-white/10 rounded-lg group-hover:rotate-12 transition-transform">
+                      <Key className="w-4 h-4" />
+                    </div>
+                    Login with OpenRouter
+                  </button>
+                )}
+                <p className="text-[10px] text-slate-600 ml-1 leading-relaxed">
+                  Login to grant access to your OpenRouter account. This is the recommended secure way to connect.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Preferred Model</label>
+                <select
+                  value={tempModel}
+                  onChange={(e) => setTempModel(e.target.value)}
+                  className="w-full bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-amber-500 transition-all appearance-none cursor-pointer"
+                >
+                  <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash (Fastest)</option>
+                  <option value="google/gemini-2.5-pro">Gemini 2.5 Pro (Smarts)</option>
+                  <option value="anthropic/claude-3-haiku">Claude 3 Haiku</option>
+                  <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 8B</option>
+                  <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
+                </select>
+                <p className="text-[10px] text-slate-600 ml-1 leading-relaxed">
+                  Different models may have different costs and speeds.
+                </p>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={handleTestConnection}
+                  disabled={isTesting}
+                  className={`w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-2 ${isTesting ? 'border-slate-800 text-slate-700' : 'border-slate-800 text-slate-400 hover:text-amber-500 hover:border-amber-500/50'}`}
+                >
+                  {isTesting ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" /> Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="w-3 h-3" /> Test Connection
+                    </>
+                  )}
+                </button>
+                {testResult && (
+                  <div className={`mt-3 px-4 py-2 rounded-xl text-[10px] font-bold animate-in fade-in slide-in-from-top-2 ${testResult.success ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                    {testResult.message}
+                  </div>
+                )}
+              </div>
+
+              <p className="text-[10px] text-slate-600 ml-1 leading-relaxed">
+                Your key is stored locally in your browser (or loaded from .env). Get one at <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" className="text-amber-500 hover:underline">openrouter.ai</a>.
+              </p>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    localStorage.setItem('openrouter_api_key', tempApiKey);
+                    localStorage.setItem('openrouter_model', tempModel);
+                    setShowSettings(false);
+                    setTestResult(null);
+                    if (phase === 'LEARNING') fetchLesson();
+                  }}
+                  className="flex-grow py-4 bg-amber-500 text-slate-950 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-amber-500/20"
+                >
+                  Save Settings
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSettings(false);
+                    setTestResult(null);
+                  }}
+                  className="px-6 py-4 bg-slate-800 text-slate-400 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-700 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </header>
+      )}
 
       <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-4 gap-12 flex-grow">
         <aside className="lg:col-span-1 space-y-6">
@@ -271,21 +535,24 @@ const App: React.FC = () => {
                 chapters.map((ch, idx) => {
                   const isActive = currentChapterIndex === idx;
                   const isCompleted = completedChapters.includes(ch.id);
+                  const isLocked = idx > 0 && !completedChapters.includes(chapters[idx - 1].id);
+
                   return (
                     <button
                       key={ch.id}
-                      onClick={() => selectChapter(idx, (type) => setScaleType(type))}
-                      className={`w-full text-left group flex items-center gap-4 transition-all ${isActive ? 'translate-x-2' : ''}`}
+                      onClick={() => !isLocked && selectChapter(idx, (type) => setScaleType(type))}
+                      disabled={isLocked}
+                      className={`w-full text-left group flex items-center gap-4 transition-all ${isActive ? 'translate-x-2' : ''} ${isLocked ? 'cursor-not-allowed' : ''}`}
                     >
-                      <div className={`flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold transition-all shadow-lg ${isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-amber-500 text-slate-950 scale-110' : 'bg-slate-800 text-slate-600 group-hover:bg-slate-700 group-hover:text-slate-400'
+                      <div className={`flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold transition-all shadow-lg ${isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-amber-500 text-slate-950 scale-110' : isLocked ? 'bg-slate-900 text-slate-700' : 'bg-slate-800 text-slate-600 group-hover:bg-slate-700 group-hover:text-slate-400'
                         }`}>
-                        {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : idx + 1}
+                        {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : isLocked ? <Lock className="w-4 h-4" /> : idx + 1}
                       </div>
                       <div className="flex-grow min-w-0">
-                        <div className={`text-sm font-bold transition-colors truncate ${isActive ? 'text-amber-500' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                        <div className={`text-sm font-bold transition-colors truncate ${isActive ? 'text-amber-500' : isLocked ? 'text-slate-700' : 'text-slate-400 group-hover:text-slate-300'}`}>
                           {ch.title}
                         </div>
-                        <div className="text-[10px] text-slate-600 truncate uppercase font-bold tracking-widest mt-0.5">{ch.focus}</div>
+                        <div className="text-[10px] text-slate-600 truncate uppercase font-bold tracking-widest mt-0.5">{isLocked ? 'Locked' : ch.focus}</div>
                       </div>
                     </button>
                   );
@@ -452,14 +719,101 @@ const App: React.FC = () => {
                   successNoteIds={successNoteIds}
                   errorNoteId={errorNoteId}
                   highlightInterval={phase === 'LEARNING' ? currentStep?.targetInterval : null}
+                  hintNoteId={hintNoteId}
                 />
               </section>
+
+              {phase === 'LEARNING' && currentStep && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-8 animate-in slide-in-from-left-8 duration-500">
+                  <div className="flex items-start gap-6">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/20">
+                      <Sparkles className="w-6 h-6 text-slate-950" />
+                    </div>
+                    <div>
+                      <h4 className="text-amber-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Interactive Guide</h4>
+                      <h5 className="text-2xl font-black text-white mb-4 tracking-tight">{currentStep.title}</h5>
+                      <p className="text-slate-300 text-lg font-medium leading-relaxed max-w-2xl">{currentStep.instruction}</p>
+                      <div className="mt-8 flex items-center gap-4">
+                        <div className="px-5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-slate-400">
+                          Goal: {currentStep.actionText}
+                        </div>
+                        {tutorialSuccess && (
+                          <button
+                            onClick={() => {
+                              if (activeStepIndex < currentChapter.tutorialSteps.length - 1) {
+                                setActiveStepIndex(activeStepIndex + 1);
+                                setTutorialSuccess(false);
+                              } else {
+                                startChallenge();
+                              }
+                            }}
+                            className="px-8 py-2.5 bg-green-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-green-500/20 animate-in zoom-in"
+                          >
+                            {activeStepIndex < currentChapter.tutorialSteps.length - 1 ? 'Next Step' : 'Finish Lesson'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {phase === 'CHALLENGE' && currentChapter?.challenge && (
+                <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-3xl p-8 animate-in slide-in-from-right-8 duration-500">
+                  <div className="flex items-start gap-6">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-500/20">
+                      <Trophy className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="w-full">
+                      <h4 className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Proficiency Challenge</h4>
+                      <h5 className="text-2xl font-black text-white mb-4 tracking-tight">
+                        {challengeComplete ? "Challenge Unlocked!" : "Prove Your Skills"}
+                      </h5>
+                      <p className="text-slate-300 text-lg font-medium leading-relaxed max-w-2xl">
+                        {currentChapter.challenge.description}
+                      </p>
+
+                      <div className="mt-8 flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-slate-400">
+                          <span>Progress: </span>
+                          <span className={`text-lg ${challengeComplete ? 'text-green-500' : 'text-indigo-500'}`}>
+                            {successNoteIds.length}
+                          </span>
+                          <span className="text-slate-600">/</span>
+                          <span>{currentChapter?.challenge?.requiredCount}</span>
+                        </div>
+
+                        {!challengeComplete && (
+                          <button
+                            onClick={activateHint}
+                            className="px-5 py-2.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-all flex items-center gap-2"
+                          >
+                            <Sparkles className="w-4 h-4" /> Need a Hint?
+                          </button>
+                        )}
+
+                        {challengeComplete && (
+                          <button
+                            onClick={backToPreview}
+                            className="px-8 py-2.5 bg-green-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-green-500/20 animate-in zoom-in"
+                          >
+                            Complete Chapter
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {
                 phase === 'LEARNING' && (
                   <div className="bg-slate-900/30 border border-slate-800/60 rounded-3xl overflow-hidden animate-in slide-in-from-bottom-8 duration-700 delay-150 shadow-3xl">
                     <div className="p-5 border-b border-slate-800/60 flex items-center justify-between bg-slate-900/50 backdrop-blur-sm">
-                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-3"><Activity className="w-4 h-4 text-amber-500" /> Lesson: Triplets on 2-Note Strings</h4>
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-3">
+                        <Activity className="w-4 h-4 text-amber-500" />
+                        Lesson: {currentChapter?.title || 'Masterclass'}
+                      </h4>
                       <button onClick={fetchLesson} className="p-2 hover:bg-slate-800 rounded-xl text-slate-500 transition-all hover:text-amber-500"><Sparkles className="w-4 h-4" /></button>
                     </div>
                     <div className="p-10 prose prose-invert prose-sm max-w-none min-h-[250px] font-medium leading-relaxed selection:bg-amber-500/20">
@@ -468,7 +822,7 @@ const App: React.FC = () => {
                           <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden relative border border-slate-700">
                             <div className="absolute inset-0 bg-amber-500 animate-[loading_1.5s_infinite] shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
                           </div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 animate-pulse">Calculating Triplet Groups...</p>
+                          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 animate-pulse">Personalizing Theory Lesson...</p>
                         </div>
                       ) : (
                         <div className="text-slate-400 whitespace-pre-wrap leading-loose">{lesson}</div>

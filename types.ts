@@ -1,5 +1,5 @@
 
-export type ScaleType = 'minor' | 'major';
+export type ScaleType = 'minor' | 'major' | 'chromatic';
 
 export interface Note {
   name: string;

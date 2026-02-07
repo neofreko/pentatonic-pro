@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { loadLessons } from '../services/lessonLoader';
-import { getScaleLesson } from '../services/geminiService';
+import { getScaleLesson } from '../services/aiService';
 import { Chapter, ScaleType } from '../types';
 
 export type AppPhase = 'PREVIEW' | 'LEARNING' | 'CHALLENGE';
@@ -8,9 +8,31 @@ export type AppPhase = 'PREVIEW' | 'LEARNING' | 'CHALLENGE';
 export const useSyllabus = (rootNote: string, scaleType: ScaleType, currentPosition: number) => {
     const [chapters, setChapters] = useState<Chapter[]>([]);
     const [loadingChapters, setLoadingChapters] = useState(true);
-    const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
-    const [completedChapters, setCompletedChapters] = useState<string[]>([]);
-    const [phase, setPhase] = useState<AppPhase>('PREVIEW');
+    const [currentChapterIndex, setCurrentChapterIndex] = useState(() => {
+        const saved = localStorage.getItem('current_chapter_index');
+        return saved ? parseInt(saved, 10) : 0;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('current_chapter_index', currentChapterIndex.toString());
+    }, [currentChapterIndex]);
+
+    const [completedChapters, setCompletedChapters] = useState<string[]>(() => {
+        const saved = localStorage.getItem('completed_chapters');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    useEffect(() => {
+        localStorage.setItem('completed_chapters', JSON.stringify(completedChapters));
+    }, [completedChapters]);
+    const [phase, setPhase] = useState<AppPhase>(() => {
+        const saved = localStorage.getItem('app_phase');
+        return (saved as AppPhase) || 'PREVIEW';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('app_phase', phase);
+    }, [phase]);
     const [activeStepIndex, setActiveStepIndex] = useState(0);
     const [tutorialSuccess, setTutorialSuccess] = useState(false);
     const [lesson, setLesson] = useState<string | null>(null);

@@ -16,9 +16,11 @@ Pentatonic Pro is a specialized guitar pedagogy application designed to bridge t
 - Uses the **Web Audio API**.
 - Implements a basic synthesis engine (Triangle Oscillator with an Exponential Decay Envelope) to simulate a guitar pluck without external assets.
 
-### AI Integration (`services/geminiService.ts`)
-- **Model**: `gemini-3-flash-preview` for high-speed instructional generation.
-- **Context Injection**: The service takes the current `Chapter` state (Title, Focus, Mission) and injects it into the prompt. This ensures the AI's explanation aligns with what the user sees on the fretboard.
+### AI Integration (`services/aiService.ts`)
+- **Primary Engine**: **OpenRouter** (supports Gemini 2.0 Flash, Claude 3, Llama 3.1, etc.).
+- **Authentication**: Secure **PKCE (Proof Key for Code Exchange)** flow for user-based OpenRouter access.
+- **Fallback**: Direct Google Gemini API integration as a secondary option.
+- **Context Injection**: The service takes the current `Chapter` state (Title, Focus, Mission) and the current fretboard position to inject into the instructor prompt. This ensures the AI's explanation aligns with what the user sees.
 
 ## 3. Data Schema
 The syllabus is defined in `data/chapters.ts` using the following interface:

@@ -3,12 +3,24 @@ import { Chapter, TutorialStep, Challenge, ScaleType } from '../types';
 
 export const loadLessons = async (): Promise<Chapter[]> => {
     try {
-        const response = await fetch('./lessons.md');
-        if (!response.ok) {
-            throw new Error('Failed to fetch lessons.md');
+        const indexResponse = await fetch('./lessons/index.json');
+        if (!indexResponse.ok) {
+            throw new Error('Failed to fetch lessons/index.json');
         }
-        const text = await response.text();
-        return parseMarkdownLessons(text);
+        const fileNames: string[] = await indexResponse.json();
+
+        const chapterPromises = fileNames.map(async (fileName) => {
+            const response = await fetch(`./lessons/${fileName}`);
+            if (!response.ok) {
+                console.error(`Failed to fetch ./lessons/${fileName}`);
+                return null;
+            }
+            const text = await response.text();
+            return parseMarkdownLessons(text)[0]; // Each file should contain one chapter
+        });
+
+        const chapters = await Promise.all(chapterPromises);
+        return chapters.filter((ch): ch is Chapter => ch !== null);
     } catch (error) {
         console.error("Error loading lessons:", error);
         return [];
