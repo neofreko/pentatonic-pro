@@ -22,6 +22,55 @@ function makeDistortionCurve(amount: number) {
   return curve;
 }
 
+let droneOsc: OscillatorNode | null = null;
+let droneGain: GainNode | null = null;
+
+export const stopDrone = () => {
+  if (droneOsc) {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    try {
+      droneGain?.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      droneOsc.stop(now + 0.5);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    droneOsc = null;
+    droneGain = null;
+  }
+};
+
+export const startDrone = (rootMidi: number) => {
+  stopDrone(); // Stop any existing drone
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') ctx.resume();
+
+  droneOsc = ctx.createOscillator();
+  droneGain = ctx.createGain();
+
+  // Drop 2 octaves for deep bass drone
+  const bassMidi = rootMidi - 24; 
+  const freq = 440 * Math.pow(2, (bassMidi - 69) / 12);
+
+  droneOsc.type = 'sawtooth'; // Richer harmonic content
+  droneOsc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+  // Low Pass Filter to make it warm and not buzzy
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 200; // Deep warmth
+
+  // Volume envelope
+  droneGain.gain.setValueAtTime(0, ctx.currentTime);
+  droneGain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 1.0); // Slow fade in
+
+  droneOsc.connect(filter);
+  filter.connect(droneGain);
+  droneGain.connect(ctx.destination);
+
+  droneOsc.start();
+};
+
 export const setAudioPreset = (preset: 'clean' | 'crunch' | 'dreamy') => {
   currentPreset = preset;
 };

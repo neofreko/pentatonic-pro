@@ -127,3 +127,65 @@ export const testOpenRouterConnection = async (apiKey: string, model: string) =>
     return { success: false, message: error.message };
   }
 };
+
+export const getJamTip = async (rootNote: string, scaleType: ScaleType) => {
+  const openRouterKey = localStorage.getItem('openrouter_api_key') || process.env.OPENROUTER_API_KEY || (import.meta as any).env?.VITE_OPENROUTER_API_KEY;
+  let openRouterModel = localStorage.getItem('openrouter_model') || process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
+  const geminiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+
+  const prompt = `You are a high-energy, fun guitar coach in a "Jam Session" mode.
+  
+  CONTEXT:
+  - Key: ${rootNote} ${scaleType} Pentatonic
+  - Student Level: Beginner/Intermediate (knows Box 1, Blue Note, and basic phrasing)
+
+  YOUR TASK:
+  Give me ONE short, creative "Micro-Challenge" to help me noodle/improvise.
+  
+  EXAMPLES OF GOOD TIPS:
+  - "Play the Root, then slide up to the Blue Note and wiggle it!"
+  - "Try a 'Call and Response': Play a loud lick, then whisper the same lick."
+  - "Only play on the top 2 strings for the next 30 seconds. Go!"
+  - "Hit the b7 and bend it slightly towards the Root. Make it cry!"
+  
+  Keep it under 30 words. Make it sound exciting! Use emojis 🎸🔥`;
+
+  // Try OpenRouter
+  if (openRouterKey) {
+    try {
+      const response = await fetch(OPENROUTER_API_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openRouterKey}`,
+          "HTTP-Referer": "https://pentatonic-pro.pages.dev",
+          "X-Title": "Pentatonic Pro",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": openRouterModel,
+          "messages": [{ "role": "user", "content": prompt }]
+        })
+      });
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || "Rock on! Just feel the groove!";
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // Fallback Gemini
+  if (geminiKey) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const response = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: prompt,
+      });
+      return response.text;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  return "Try playing a rhythmic motif: Long-Short-Short-Long!";
+};

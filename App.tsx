@@ -5,8 +5,8 @@ import { ScaleType, TutorialStep } from './types';
 import { PENTATONIC_POSITIONS } from './data/positions'; // Imported from new data file
 import Fretboard from './components/Fretboard';
 import { useSyllabus } from './hooks/useSyllabus';
-import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2, Settings, X, Key, Lock, LogOut } from 'lucide-react';
-import { playNote, setAudioPreset } from './utils/audio';
+import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2, Settings, X, Key, Lock, LogOut, Zap, Mic2 } from 'lucide-react';
+import { playNote, setAudioPreset, startDrone, stopDrone } from './utils/audio';
 import { getIntervalName, getNoteAtPosition } from './utils/musicLogic';
 import { initiateOpenRouterLogin, handleOpenRouterCallback } from './utils/openRouterAuth';
 
@@ -119,6 +119,38 @@ const App: React.FC = () => {
   }, [successNoteIds, currentChapter?.id]);
 
   const [showSettings, setShowSettings] = useState(false);
+  const [isJamming, setIsJamming] = useState(false);
+  const [jamTip, setJamTip] = useState<string | null>(null);
+  const [loadingTip, setLoadingTip] = useState(false);
+
+  // Manage Drone Sound
+  useEffect(() => {
+    if (isJamming) {
+      const rootIdx = NOTES.indexOf(rootNote);
+      // Map to a comfortable bass range (MIDI 36-47 / C2-B2)
+      const droneMidi = 36 + rootIdx; 
+      startDrone(droneMidi);
+    } else {
+      stopDrone();
+    }
+    return () => stopDrone(); // Cleanup on unmount
+  }, [isJamming, rootNote]);
+
+  const handleGetJamTip = async () => {
+    setLoadingTip(true);
+    setJamTip(null);
+    try {
+      const { getJamTip } = await import('./services/aiService');
+      const tip = await getJamTip(rootNote, scaleType);
+      setJamTip(tip);
+    } catch (e) {
+      console.error(e);
+      setJamTip("Just feel the rhythm and play what you hear in your head!");
+    } finally {
+      setLoadingTip(false);
+    }
+  };
+
   const [tempApiKey, setTempApiKey] = useState(localStorage.getItem('openrouter_api_key') || '');
   const [tempModel, setTempModel] = useState(localStorage.getItem('openrouter_model') || 'google/gemini-2.0-flash-001');
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -375,6 +407,20 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <button
+            onClick={() => {
+              setIsJamming(!isJamming);
+              if (!isJamming) setJamTip(null); // Reset tip on start
+            }}
+            className={`p-3 border rounded-2xl transition-all backdrop-blur-md flex items-center gap-2 ${isJamming 
+              ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.4)] animate-pulse' 
+              : 'bg-slate-900/40 border-slate-800/50 text-slate-400 hover:text-amber-500 hover:bg-slate-800'}`}
+            title="Jam Mode"
+          >
+            <Zap className={`w-5 h-5 ${isJamming ? 'fill-current' : ''}`} />
+            {isJamming && <span className="text-xs font-black uppercase tracking-widest pr-1">Jamming</span>}
+          </button>
 
           <button
             onClick={() => setShowSettings(true)}
@@ -723,7 +769,43 @@ const App: React.FC = () => {
                 />
               </section>
 
-              {phase === 'LEARNING' && currentStep && (
+              {isJamming && (
+                <div className="bg-gradient-to-br from-amber-500/20 to-purple-600/20 border border-amber-500/30 rounded-3xl p-8 animate-in slide-in-from-top-8 duration-500 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 blur-[80px] rounded-full" />
+                  <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+                    <div className="w-20 h-20 rounded-full bg-slate-950 border-4 border-amber-500 flex items-center justify-center shadow-2xl flex-shrink-0 animate-bounce-slow">
+                      <Mic2 className="w-8 h-8 text-amber-500" />
+                    </div>
+                    <div className="flex-grow space-y-4">
+                      <h4 className="text-amber-500 text-xs font-black uppercase tracking-[0.3em]">AI Jam Coach</h4>
+                      
+                      {!jamTip ? (
+                        <div className="space-y-2">
+                          <h3 className="text-3xl font-black text-white italic tracking-tight">"Ready to make some noise?"</h3>
+                          <p className="text-slate-300 font-medium">I'm listening. Hit the button below and I'll give you a fun riff idea!</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4 animate-in fade-in zoom-in duration-300">
+                          <div className="text-2xl font-bold text-white leading-relaxed font-mono bg-slate-950/50 p-6 rounded-2xl border border-white/10 shadow-inner">
+                            "{jamTip}"
+                          </div>
+                        </div>
+                      )}
+                      
+                      <button 
+                        onClick={handleGetJamTip} 
+                        disabled={loadingTip}
+                        className="px-8 py-4 bg-amber-500 text-slate-950 rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(245,158,11,0.4)] flex items-center gap-3 mx-auto md:mx-0"
+                      >
+                        {loadingTip ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                        {jamTip ? "Give me another one!" : "Get a Noodle Idea"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {phase === 'LEARNING' && currentStep && !isJamming && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-8 animate-in slide-in-from-left-8 duration-500">
                   <div className="flex items-start gap-6">
                     <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/20">
@@ -758,7 +840,7 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {phase === 'CHALLENGE' && currentChapter?.challenge && (
+              {phase === 'CHALLENGE' && currentChapter?.challenge && !isJamming && (
                 <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-3xl p-8 animate-in slide-in-from-right-8 duration-500">
                   <div className="flex items-start gap-6">
                     <div className="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-500/20">
@@ -807,7 +889,7 @@ const App: React.FC = () => {
               )}
 
               {
-                phase === 'LEARNING' && (
+                phase === 'LEARNING' && !isJamming && (
                   <div className="bg-slate-900/30 border border-slate-800/60 rounded-3xl overflow-hidden animate-in slide-in-from-bottom-8 duration-700 delay-150 shadow-3xl">
                     <div className="p-5 border-b border-slate-800/60 flex items-center justify-between bg-slate-900/50 backdrop-blur-sm">
                       <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-3">
