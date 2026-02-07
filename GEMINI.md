@@ -46,5 +46,6 @@ You are working on the **Pentatonic Pro** project.
 - **Testing**: Vitest (via `bun test`).
 
 ## 4. Behavior
-- Always verify your changes by running tests.
+- **Verify (Tests):** Always verify your changes by running tests (`bun test`).
+- **Verify (Types):** Always run `bun run typecheck` before finishing. This catches scoping and type errors that tests might miss.
 - If a test doesn't exist for the code you are modifying, create one first.

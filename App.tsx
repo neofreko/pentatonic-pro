@@ -5,7 +5,7 @@ import { ScaleType, TutorialStep } from './types';
 import { PENTATONIC_POSITIONS } from './data/positions'; // Imported from new data file
 import Fretboard from './components/Fretboard';
 import { useSyllabus } from './hooks/useSyllabus';
-import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2, Settings, X, Key, Lock, LogOut, Zap, Mic2 } from 'lucide-react';
+import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2, Settings, X, Key, Lock, LogOut, Zap, Mic2, Keyboard } from 'lucide-react';
 import { playNote, setAudioPreset, startDrone, stopDrone } from './utils/audio';
 import { getIntervalName, getNoteAtPosition } from './utils/musicLogic';
 import { initiateOpenRouterLogin, handleOpenRouterCallback } from './utils/openRouterAuth';
@@ -194,12 +194,82 @@ const App: React.FC = () => {
     return ids;
   }, [rootNote, scaleType, currentPosition]);
 
-  const fullSequence = useMemo(() => {
-    const notesInBox = Array.from(currentPositionNoteIds).map((id: string) => {
+  const notesInBox = useMemo(() => {
+    return Array.from(currentPositionNoteIds).map((id: string) => {
       const [s, f] = id.split('-').map(Number);
-      return { s, f, midi: MIDI_TUNING[s] + f };
+      return { id, s, f, midi: MIDI_TUNING[s] + f };
     }).sort((a, b) => a.midi - b.midi);
+  }, [currentPositionNoteIds]);
 
+  const [hintNoteId, setHintNoteId] = useState<string | null>(null);
+
+  const activateHint = () => {
+    if (!currentChapter?.challenge) return;
+    const target = currentChapter.challenge.targetInterval;
+
+    // Find candidates that are currently within the visible fretboard
+    const candidates = Array.from(currentPositionNoteIds).filter(id => {
+      if (successNoteIds.includes(id)) return false; // Already found
+      const [s, f] = id.split('-').map(Number);
+      if (f > FRET_COUNT) return false; // Extra safety check
+
+      const noteName = getNoteAtPosition(s, f);
+      const interval = getIntervalName(noteName, rootNote, scaleType);
+      return interval === target;
+    });
+
+    if (candidates.length > 0) {
+      // Pick random
+      const randomId = candidates[Math.floor(Math.random() * candidates.length)];
+      setHintNoteId(randomId);
+    }
+  };
+
+  const handleNoteClick = useCallback((s: number, f: number, noteName: string, interval: string) => {
+    const noteId = `${s}-${f}`;
+    
+    // Play the audio
+    const midi = MIDI_TUNING[s] + f;
+    playNote(midi);
+
+    setActiveNoteId(noteId);
+    if (activeNoteTimeoutRef.current) window.clearTimeout(activeNoteTimeoutRef.current);
+    activeNoteTimeoutRef.current = window.setTimeout(() => setActiveNoteId(null), 1000);
+
+    // Clear hint if they clicked it (or any note)
+    setHintNoteId(null);
+
+    if (phase === 'CHALLENGE') {
+      if (challengeComplete) return;
+      if (successNoteIds.includes(noteId)) return;
+
+      if (interval === currentChapter?.challenge?.targetInterval) {
+        const newSuccess = [...successNoteIds, noteId];
+        setSuccessNoteIds(newSuccess);
+        if (currentChapter?.challenge && newSuccess.length >= currentChapter.challenge.requiredCount) {
+          setChallengeComplete(true);
+          if (currentChapter?.id && !completedChapters.includes(currentChapter.id)) {
+            setCompletedChapters(prev => [...prev, currentChapter.id]);
+          }
+        }
+      } else {
+        setErrorNoteId(noteId);
+        setTimeout(() => setErrorNoteId(null), 500);
+      }
+      return;
+    }
+
+    if (phase === 'LEARNING' && currentStep?.targetInterval) {
+      if (interval === currentStep.targetInterval) {
+        setTutorialSuccess(true);
+      } else {
+        setErrorNoteId(`${s}-${f}`);
+        setTimeout(() => setErrorNoteId(null), 500);
+      }
+    }
+  }, [phase, challengeComplete, successNoteIds, currentChapter, completedChapters, currentStep, setCompletedChapters]);
+
+  const fullSequence = useMemo(() => {
     if (notesInBox.length < 3) return [];
 
     const sequence: { s: number, f: number, midi: number, pair: number[], tripletIdx: number }[] = [];
@@ -223,27 +293,50 @@ const App: React.FC = () => {
     }
 
     return sequence;
-  }, [currentPositionNoteIds]);
+  }, [notesInBox]);
+
+  // Keyboard Support
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+
+      const keys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'"];
+      const keyIndex = keys.indexOf(e.key.toLowerCase());
+
+      if (keyIndex !== -1 && keyIndex < notesInBox.length) {
+        const note = notesInBox[keyIndex];
+        const noteName = getNoteAtPosition(note.s, note.f);
+        const interval = getIntervalName(noteName, rootNote, scaleType);
+        handleNoteClick(note.s, note.f, noteName, interval);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [notesInBox, rootNote, scaleType]);
 
   const stepForward = useCallback(() => {
     if (currentStepIndex < fullSequence.length - 1) {
       const nextIdx = currentStepIndex + 1;
       setCurrentStepIndex(nextIdx);
       const note = fullSequence[nextIdx];
-      setActiveNoteId(`${note.s}-${note.f}`);
-      playNote(note.midi);
+      const noteName = getNoteAtPosition(note.s, note.f);
+      const interval = getIntervalName(noteName, rootNote, scaleType);
+      handleNoteClick(note.s, note.f, noteName, interval);
     }
-  }, [currentStepIndex, fullSequence]);
+  }, [currentStepIndex, fullSequence, rootNote, scaleType, handleNoteClick]);
 
   const stepBackward = useCallback(() => {
     if (currentStepIndex > 0) {
       const nextIdx = currentStepIndex - 1;
       setCurrentStepIndex(nextIdx);
       const note = fullSequence[nextIdx];
-      setActiveNoteId(`${note.s}-${note.f}`);
-      playNote(note.midi);
+      const noteName = getNoteAtPosition(note.s, note.f);
+      const interval = getIntervalName(noteName, rootNote, scaleType);
+      handleNoteClick(note.s, note.f, noteName, interval);
     }
-  }, [currentStepIndex, fullSequence]);
+  }, [currentStepIndex, fullSequence, rootNote, scaleType, handleNoteClick]);
 
   const resetSequence = () => {
     setCurrentStepIndex(-1);
@@ -290,69 +383,6 @@ const App: React.FC = () => {
 
   const backToPreview = () => {
     setPhase('PREVIEW');
-  };
-
-  const [hintNoteId, setHintNoteId] = useState<string | null>(null);
-
-  const activateHint = () => {
-    if (!currentChapter?.challenge) return;
-    const target = currentChapter.challenge.targetInterval;
-
-    // Find candidates that are currently within the visible fretboard
-    const candidates = Array.from(currentPositionNoteIds).filter(id => {
-      if (successNoteIds.includes(id)) return false; // Already found
-      const [s, f] = id.split('-').map(Number);
-      if (f > FRET_COUNT) return false; // Extra safety check
-
-      const noteName = getNoteAtPosition(s, f);
-      const interval = getIntervalName(noteName, rootNote, scaleType);
-      return interval === target;
-    });
-
-    if (candidates.length > 0) {
-      // Pick random
-      const randomId = candidates[Math.floor(Math.random() * candidates.length)];
-      setHintNoteId(randomId);
-    }
-  };
-
-  const handleNoteClick = (s: number, f: number, noteName: string, interval: string) => {
-    const noteId = `${s}-${f}`;
-    setActiveNoteId(noteId);
-    if (activeNoteTimeoutRef.current) window.clearTimeout(activeNoteTimeoutRef.current);
-    activeNoteTimeoutRef.current = window.setTimeout(() => setActiveNoteId(null), 1000);
-
-    // Clear hint if they clicked it (or any note)
-    setHintNoteId(null);
-
-    if (phase === 'CHALLENGE') {
-      if (challengeComplete) return;
-      if (successNoteIds.includes(noteId)) return;
-
-      if (interval === currentChapter?.challenge?.targetInterval) {
-        const newSuccess = [...successNoteIds, noteId];
-        setSuccessNoteIds(newSuccess);
-        if (currentChapter?.challenge && newSuccess.length >= currentChapter.challenge.requiredCount) {
-          setChallengeComplete(true);
-          if (currentChapter?.id && !completedChapters.includes(currentChapter.id)) {
-            setCompletedChapters(prev => [...prev, currentChapter.id]);
-          }
-        }
-      } else {
-        setErrorNoteId(noteId);
-        setTimeout(() => setErrorNoteId(null), 500);
-      }
-      return;
-    }
-
-    if (phase === 'LEARNING' && currentStep?.targetInterval) {
-      if (interval === currentStep.targetInterval) {
-        setTutorialSuccess(true);
-      } else {
-        setErrorNoteId(`${s}-${f}`);
-        setTimeout(() => setErrorNoteId(null), 500);
-      }
-    }
   };
 
   // ... (rest of helper functions)
@@ -800,6 +830,20 @@ const App: React.FC = () => {
                         {loadingTip ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
                         {jamTip ? "Give me another one!" : "Get a Noodle Idea"}
                       </button>
+
+                      <div className="pt-4 flex flex-wrap items-center gap-3 justify-center md:justify-start">
+                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-950/40 px-3 py-1.5 rounded-lg border border-white/5">
+                          <Keyboard className="w-3 h-3 text-amber-500/50" />
+                          <span>Keyboard Mapping:</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          {['A','S','D','F','G','H','J','K','L',';',"'"].map((k, i) => (
+                            <div key={k} className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border transition-all ${i < notesInBox.length ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-900/50 border-slate-800/50 text-slate-700'}`}>
+                              {k}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
