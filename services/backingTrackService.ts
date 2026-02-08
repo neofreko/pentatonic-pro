@@ -357,77 +357,15 @@ export class BackingTrackService {
 
 
 
-            // 2. String Decay (The Vibration)
-
-
-
-            // Loop through the rest of the buffer, averaging previous samples (Low Pass Filter)
-
-
-
-            // y[n] = 0.99 * 0.5 * (y[n-N] + y[n-N-1])
-
-
-
-            let prevVal = 0;
-
-
-
-            // Character variation: 'Clean' strings decay slower, 'Crunch' strings are brighter
-
-
-
-            const decay = this.audioPreset === 'clean' ? 0.996 : 0.992;
-
-
-
-            
-
-
-
-            for (let i = N; i < length; i++) {
-
-
-
-        
-
-
-
-          // Safe access to previous sample
-
-
-
-    
-
-      const prevSample1 = data[i - N];
-
-      const prevSample2 = i - N - 1 >= 0 ? data[i - N - 1] : 0;
-
-      
-
-            
-
-      
-
-            const val = 0.5 * (prevSample1 + prevSample2);
-
-      
-
-            
-
-      
-
-            // Character variation: 'Clean' strings decay slower, 'Crunch' strings are brighter
-
-      
-
-            data[i] = val * decay;
-
-      
-
-          }
-
-      
+                // 2. String Decay (The Vibration)
+                // Loop through the rest of the buffer, averaging previous samples (Low Pass Filter)
+                const decay = this.audioPreset === 'clean' ? 0.998 : 0.995;
+                
+                for (let i = N; i < length; i++) {
+                  const val = 0.5 * (data[i - N] + (i - N - 1 >= 0 ? data[i - N - 1] : 0));
+                  data[i] = val * decay;
+                }
+                  
 
       
 
@@ -467,37 +405,22 @@ export class BackingTrackService {
 
     
 
-    // --- 1. THE STRING (Physical Source) ---
-
-    // Generate the raw string vibration
-
-    const stringBuffer = this.generateStringBuffer(freq, 2.0); 
-
+        // --- 1. THE STRING (Physical Source) ---
+        // Generate the raw string vibration
+        const stringBuffer = this.generateStringBuffer(freq, 3.0); 
+        
+        const source = this.audioCtx.createBufferSource();
+        source.buffer = stringBuffer;
     
-
-    const source = this.audioCtx.createBufferSource();
-
-    source.buffer = stringBuffer;
-
-
-
-    // --- 2. PRE-AMP (Gain Stage) ---
-
-    const preAmpGain = this.audioCtx.createGain();
-
-    preAmpGain.gain.setValueAtTime(0, time);
-
-    // Karplus-Strong is naturally dynamic, so we just shape the volume slightly
-
-    preAmpGain.gain.setValueAtTime(1.0, time); 
-
-    preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 0.5); // Fade out
-
-
-
-    source.connect(preAmpGain);
-
-
+        // --- 2. PRE-AMP (Gain Stage) ---
+        const preAmpGain = this.audioCtx.createGain();
+        preAmpGain.gain.setValueAtTime(0, time);
+        // Karplus-Strong is naturally dynamic
+        preAmpGain.gain.setValueAtTime(1.0, time); 
+        preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5); 
+    
+        source.connect(preAmpGain);
+    
 
     // --- 3. DISTORTION STAGE ---
 
@@ -607,12 +530,8 @@ export class BackingTrackService {
 
     masterGain.connect(this.audioCtx.destination);
 
-
-
     source.start(time);
-
-    source.stop(time + duration + 1.0);
-
+    source.stop(time + duration + 2.0);
   }
 
 
