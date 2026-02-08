@@ -151,67 +151,135 @@ export class BackingTrackService {
 
       
 
-          // 2. String Decay (The Vibration)
-
-          // Loop through the rest of the buffer, averaging previous samples (Low Pass Filter)
-
-          // y[n] = 0.99 * 0.5 * (y[n-N] + y[n-N-1])
-
-          // The 0.99 is the decay factor (energy loss)
-
-          let prevVal = 0;
-
-          for (let i = N; i < length; i++) {
-
-            const val = 0.5 * (data[i - N] + data[i - N - 1]);
-
-            // Character variation: 'Clean' strings decay slower, 'Crunch' strings are brighter
-
-            const decay = this.audioPreset === 'clean' ? 0.996 : 0.992;
-
-            data[i] = val * decay;
-
-            prevVal = val;
-
-          }
+              // 2. String Decay (The Vibration)
 
       
 
-          return buffer;
-
-        }
+              // Loop through the rest of the buffer, averaging previous samples (Low Pass Filter)
 
       
 
-        private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
-
-          if (!this.audioCtx) return;
+              let prevVal = 0;
 
       
 
-          // Calculate frequency
+              for (let i = N; i < length; i++) {
 
-          const freq = 440 * Math.pow(2, (midi - 69) / 12);
+      
+
+                // Safe access to previous sample
+
+      
+
+                const prevSample1 = data[i - N];
+
+      
+
+                const prevSample2 = i - N - 1 >= 0 ? data[i - N - 1] : 0;
+
+      
+
+                
+
+      
+
+                const val = 0.5 * (prevSample1 + prevSample2);
+
+      
+
+                
+
+      
+
+                // Character variation: 'Clean' strings decay slower, 'Crunch' strings are brighter
+
+      
+
+                const decay = this.audioPreset === 'clean' ? 0.996 : 0.992;
+
+      
+
+                data[i] = val * decay;
+
+      
+
+              }
+
+      
 
           
 
-          // --- 1. THE STRING (Physical Source) ---
+      
 
-          // Generate the raw string vibration
-
-          // We generate a slightly longer buffer to allow for natural decay tail
-
-          const stringBuffer = this.generateStringBuffer(freq, 2.0); 
-
-          
-
-          const source = this.audioCtx.createBufferSource();
-
-          source.buffer = stringBuffer;
+              return buffer;
 
       
 
-          // --- 2. PRE-AMP (Gain Stage) ---
+            }
+
+      
+
+          
+
+      
+
+          private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
+
+      
+
+            if (!this.audioCtx) return;
+
+      
+
+        
+
+      
+
+            // Calculate frequency
+
+      
+
+            const freq = 440 * Math.pow(2, (midi - 69) / 12);
+
+      
+
+            
+
+      
+
+            // --- 1. THE STRING (Physical Source) ---
+
+      
+
+            // Generate the raw string vibration
+
+      
+
+            const stringBuffer = this.generateStringBuffer(freq, 2.0); 
+
+      
+
+            
+
+      
+
+            const source = this.audioCtx.createBufferSource();
+
+      
+
+            source.buffer = stringBuffer;
+
+      
+
+        
+
+      
+
+            // --- 2. PRE-AMP (Gain Stage) ---
+
+      
+
+        
 
           const preAmpGain = this.audioCtx.createGain();
 
