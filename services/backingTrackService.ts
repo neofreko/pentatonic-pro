@@ -41,11 +41,19 @@ export class BackingTrackService {
 
   private nextNoteTime: number = 0;
 
-  private timerID: number | null = null;
+    private timerID: number | null = null;
+
+    
+
+    // AudioBuffer cache: Map<Frequency, AudioBuffer>
+
+    private bufferCache: Map<number, AudioBuffer> = new Map();
+
+    
+
+    // Scheduler tuning
 
   
-
-  // Scheduler tuning
 
   private lookAhead: number = 25.0; // ms to sleep between scheduling checks
 
@@ -89,13 +97,21 @@ export class BackingTrackService {
 
    */
 
-  public setAudioPreset(preset: 'clean' | 'crunch' | 'dreamy') {
+    public setAudioPreset(preset: 'clean' | 'crunch' | 'dreamy') {
 
-    this.audioPreset = preset;
+      if (this.audioPreset !== preset) {
 
-    console.log(`[BackingTrackService] Audio preset set to ${preset}`);
+        this.audioPreset = preset;
 
-  }
+        this.bufferCache.clear(); // Recalculate strings for new tone
+
+        console.log(`[BackingTrackService] Audio preset set to ${preset} (Cache cleared)`);
+
+      }
+
+    }
+
+  
 
 
 
@@ -281,27 +297,51 @@ export class BackingTrackService {
 
 
 
-    this.track.noodleSample.forEach((item) => {
-
-      if (item.note !== null) {
-
-        // Duration in seconds (slightly shortened for articulation)
-
-        const durationSec = item.duration * secondsPerBeat; 
-
-        const playDuration = durationSec * 0.95; 
+        this.track.noodleSample.forEach((item, index) => {
 
 
 
-        this.playGuitarNote(baseMidi + item.note, now + accumulatedTime, playDuration);
+          const durationSec = item.duration * secondsPerBeat;
+
+
+
+          if (item.note !== null) {
+
+
+
+            const playDuration = durationSec * 0.95; 
+
+
+
+            console.log(`[Sequencer] Scheduling note ${index}: midi=${baseMidi + item.note}, start=${(now + accumulatedTime).toFixed(2)}, dur=${playDuration.toFixed(2)}`);
+
+
+
+            this.playGuitarNote(baseMidi + item.note, now + accumulatedTime, playDuration);
+
+
+
+          }
+
+
+
+          accumulatedTime += durationSec;
+
+
+
+        });
+
+
+
+        console.log(`[Sequencer] Total phrase duration: ${accumulatedTime.toFixed(2)} seconds`);
+
+
 
       }
 
-      accumulatedTime += item.duration * secondsPerBeat;
 
-    });
 
-  }
+    
 
 
 
@@ -393,24 +433,39 @@ export class BackingTrackService {
 
    */
 
-  private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
+    private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
 
-    if (!this.audioCtx) return;
+      if (!this.audioCtx) return;
 
+  
 
+      const freq = 440 * Math.pow(2, (midi - 69) / 12);
 
-    // Calculate frequency
+      
 
-    const freq = 440 * Math.pow(2, (midi - 69) / 12);
+      // Check cache
 
-    
+      const cacheKey = Math.round(freq * 100); // use rounded freq as key
 
-        // --- 1. THE STRING (Physical Source) ---
-        // Generate the raw string vibration
-        const stringBuffer = this.generateStringBuffer(freq, 3.0); 
-        
-        const source = this.audioCtx.createBufferSource();
-        source.buffer = stringBuffer;
+      let stringBuffer = this.bufferCache.get(cacheKey);
+
+      
+
+      if (!stringBuffer) {
+
+        stringBuffer = this.generateStringBuffer(freq, 3.0);
+
+        this.bufferCache.set(cacheKey, stringBuffer);
+
+      }
+
+      
+
+      const source = this.audioCtx.createBufferSource();
+
+      source.buffer = stringBuffer;
+
+  
     
         // --- 2. PRE-AMP (Gain Stage) ---
         const preAmpGain = this.audioCtx.createGain();
