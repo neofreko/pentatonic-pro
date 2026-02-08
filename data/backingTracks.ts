@@ -1,4 +1,3 @@
-
 import { BackingTrack } from '../types';
 
 export const BACKING_TRACKS: BackingTrack[] = [
@@ -25,7 +24,16 @@ export const BACKING_TRACKS: BackingTrack[] = [
       { root: 'A', quality: '7', duration: 4 },
       { root: 'E', quality: '7', duration: 4 },
     ],
-    noodleSample: [0, 3, 5, 6, 7, 10, 12, 10, 7, 5, 3, 0] // Blues scale run
+    noodleSample: [
+      { note: 0, duration: 1 },    // Root (A) - Quarter
+      { note: 3, duration: 0.5 },  // Minor 3rd (C) - Eighth
+      { note: 5, duration: 1.5 },  // 4th (D) - Dotted Quarter
+      { note: null, duration: 0.5 }, // Rest
+      { note: 7, duration: 0.5 },  // 5th (E)
+      { note: 5, duration: 0.5 },  // 4th (D)
+      { note: 3, duration: 0.5 },  // Minor 3rd (C)
+      { note: 0, duration: 2 },    // Root (A) - Half note (Resolution)
+    ]
   },
   {
     id: 'rock-groove-major',
@@ -42,7 +50,13 @@ export const BACKING_TRACKS: BackingTrack[] = [
       { root: 'A', quality: 'minor', duration: 4 },
       { root: 'F', quality: 'major', duration: 4 },
     ],
-    noodleSample: [0, 2, 4, 7, 9, 12, 14, 12, 9, 7, 4, 0] // Major pentatonic run
+    noodleSample: [
+      { note: 0, duration: 0.5 }, { note: 4, duration: 0.5 }, { note: 7, duration: 1 }, // Major Triad Up
+      { note: 9, duration: 0.5 }, { note: 7, duration: 0.5 }, { note: 4, duration: 0.5 }, { note: 0, duration: 0.5 }, // Run Down
+      { note: 12, duration: 2 }, // High Root - Sustained
+      { note: null, duration: 1 }, // Space
+      { note: 9, duration: 0.5 }, { note: 12, duration: 0.5 }, // Pick up
+    ]
   },
   {
     id: 'minor-soul-groove',
@@ -58,6 +72,15 @@ export const BACKING_TRACKS: BackingTrack[] = [
       { root: 'D', quality: 'minor', duration: 4 },
       { root: 'E', quality: '7', duration: 4 },
     ],
-    noodleSample: [0, 3, 5, 7, 10, 12, 15, 12, 10, 7, 5, 3, 0] // Minor pentatonic run
+    noodleSample: [
+      { note: 7, duration: 0.5 }, // 5th (E)
+      { note: 10, duration: 1.5 }, // 7th (G) - Syncopated
+      { note: 0, duration: 0.5 }, // Root (A)
+      { note: null, duration: 0.5 }, // Breath
+      { note: 3, duration: 0.5 }, // m3 (C)
+      { note: 5, duration: 0.5 }, // 4th (D)
+      { note: 3, duration: 0.5 }, // m3 (C)
+      { note: 0, duration: 2.5 }, // Root (A) - Long sustain
+    ]
   }
 ];

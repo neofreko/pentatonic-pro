@@ -56,6 +56,11 @@ export interface BackingTrackChord {
   duration: number; // Duration in beats (e.g., 4 for a full bar in 4/4)
 }
 
+export interface MelodyNote {
+  note: number | null; // MIDI offset relative to root. null for rest.
+  duration: number; // Duration in beats (e.g., 0.5 for eighth note)
+}
+
 export interface BackingTrack {
   id: string;
   name: string;
@@ -66,7 +71,7 @@ export interface BackingTrack {
   timeSignature: [number, number]; // e.g., [4, 4] or [3, 4]
   progression: BackingTrackChord[];
   style: 'rock' | 'jazz' | 'blues' | 'funk';
-  noodleSample?: number[]; // Array of MIDI notes relative to the root
+  noodleSample?: MelodyNote[]; // Structured melody with timing
 }
 
 export interface SequencerState {

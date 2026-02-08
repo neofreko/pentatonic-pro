@@ -20,6 +20,12 @@ describe('BackingTrackService', () => {
       { root: 'D', quality: '7', duration: 4 },
       { root: 'A', quality: '7', duration: 4 },
       { root: 'E', quality: '7', duration: 4 },
+    ],
+    noodleSample: [
+      { note: 0, duration: 1 },
+      { note: 3, duration: 1 },
+      { note: null, duration: 1 },
+      { note: 5, duration: 1 }
     ]
   };
 

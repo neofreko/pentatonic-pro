@@ -88,14 +88,24 @@ export class BackingTrackService {
     
     // Base MIDI for guitar range (Octave 4)
     const baseMidi = 48 + (targetKeyIndex === -1 ? 9 : targetKeyIndex); 
+    const secondsPerBeat = 60.0 / this.tempo;
     
     const now = this.audioCtx.currentTime;
-    this.track.noodleSample.forEach((offset, i) => {
-      this.playGuitarNote(baseMidi + offset, now + (i * 0.25));
+    let accumulatedTime = 0;
+
+    this.track.noodleSample.forEach((item) => {
+      if (item.note !== null) {
+        // Duration in seconds (slightly shortened for articulation)
+        const durationSec = item.duration * secondsPerBeat; 
+        const playDuration = durationSec * 0.95; 
+
+        this.playGuitarNote(baseMidi + item.note, now + accumulatedTime, playDuration);
+      }
+      accumulatedTime += item.duration * secondsPerBeat;
     });
   }
 
-  private playGuitarNote(midi: number, time: number) {
+  private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
     if (!this.audioCtx) return;
     const osc = this.audioCtx.createOscillator();
     const gain = this.audioCtx.createGain();
@@ -106,13 +116,14 @@ export class BackingTrackService {
 
     gain.gain.setValueAtTime(0, time);
     gain.gain.linearRampToValueAtTime(0.2, time + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.8);
+    // Envelope matches duration
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
     osc.connect(gain);
     gain.connect(this.audioCtx.destination);
 
     osc.start(time);
-    osc.stop(time + 0.8);
+    osc.stop(time + duration + 0.1);
   }
 
   public stop() {
