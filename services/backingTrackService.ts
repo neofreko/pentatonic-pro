@@ -297,27 +297,71 @@ export class BackingTrackService {
 
 
 
-        this.track.noodleSample.forEach((item, index) => {
+            this.track.noodleSample.forEach((item, index) => {
 
 
 
-          const durationSec = item.duration * secondsPerBeat;
+              const durationSec = item.duration * secondsPerBeat;
 
 
 
-          if (item.note !== null) {
+              if (item.note !== null) {
 
 
 
-            const playDuration = durationSec * 0.95; 
+                const playDuration = durationSec * 0.95; 
 
 
 
-            console.log(`[Sequencer] Scheduling note ${index}: midi=${baseMidi + item.note}, start=${(now + accumulatedTime).toFixed(2)}, dur=${playDuration.toFixed(2)}`);
+                
 
 
 
-            this.playGuitarNote(baseMidi + item.note, now + accumulatedTime, playDuration);
+                // Humanization: Micro-timing (Groove)
+
+
+
+                // Add random jitter +/- 15ms, but keep the first note tight
+
+
+
+                const jitter = index === 0 ? 0 : (Math.random() * 0.03 - 0.015);
+
+
+
+                const startTime = now + accumulatedTime + jitter;
+
+
+
+        
+
+
+
+                console.log(`[Sequencer] Scheduling note ${index}: midi=${baseMidi + item.note}, start=${startTime.toFixed(2)}, dur=${playDuration.toFixed(2)}`);
+
+
+
+                
+
+
+
+                this.playGuitarNote(baseMidi + item.note, startTime, playDuration, item.velocity || 0.8);
+
+
+
+              }
+
+
+
+              accumulatedTime += durationSec;
+
+
+
+            });
+
+
+
+            console.log(`[Sequencer] Total phrase duration: ${accumulatedTime.toFixed(2)} seconds`);
 
 
 
@@ -325,19 +369,7 @@ export class BackingTrackService {
 
 
 
-          accumulatedTime += durationSec;
-
-
-
-        });
-
-
-
-        console.log(`[Sequencer] Total phrase duration: ${accumulatedTime.toFixed(2)} seconds`);
-
-
-
-      }
+        
 
 
 
@@ -425,56 +457,73 @@ export class BackingTrackService {
 
    * 
 
-   * @param midi - The MIDI note number.
+      * @param midi - The MIDI note number.
 
-   * @param time - The AudioContext time to start playback.
+      * @param time - The AudioContext time to start playback.
 
-   * @param duration - Duration of the note in seconds.
+      * @param duration - Duration of the note in seconds.
 
-   */
+      * @param velocity - 0.0 to 1.0, controls volume and attack bite.
 
-    private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
+      */
 
-      if (!this.audioCtx) return;
+     private playGuitarNote(midi: number, time: number, duration: number = 0.8, velocity: number = 0.8) {
 
-  
+       if (!this.audioCtx) return;
 
-      const freq = 440 * Math.pow(2, (midi - 69) / 12);
+   
 
-      
+       const freq = 440 * Math.pow(2, (midi - 69) / 12);
 
-      // Check cache
+       
 
-      const cacheKey = Math.round(freq * 100); // use rounded freq as key
+       // Check cache (we might want to vary this by velocity later, but for now cache pitch)
 
-      let stringBuffer = this.bufferCache.get(cacheKey);
+       const cacheKey = Math.round(freq * 100); 
 
-      
+       let stringBuffer = this.bufferCache.get(cacheKey);
 
-      if (!stringBuffer) {
+       
 
-        stringBuffer = this.generateStringBuffer(freq, 3.0);
+       if (!stringBuffer) {
 
-        this.bufferCache.set(cacheKey, stringBuffer);
+         stringBuffer = this.generateStringBuffer(freq, 3.0);
 
-      }
+         this.bufferCache.set(cacheKey, stringBuffer);
 
-      
+       }
 
-      const source = this.audioCtx.createBufferSource();
+       
 
-      source.buffer = stringBuffer;
+       const source = this.audioCtx.createBufferSource();
 
-  
-    
-        // --- 2. PRE-AMP (Gain Stage) ---
-        const preAmpGain = this.audioCtx.createGain();
-        preAmpGain.gain.setValueAtTime(0, time);
-        // Karplus-Strong is naturally dynamic
-        preAmpGain.gain.setValueAtTime(1.0, time); 
-        preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5); 
-    
-        source.connect(preAmpGain);
+       source.buffer = stringBuffer;
+
+   
+
+       // --- 2. PRE-AMP (Gain Stage) ---
+
+       // Velocity scales the input gain
+
+       const preAmpGain = this.audioCtx.createGain();
+
+       const attackLevel = 1.0 * velocity; 
+
+       
+
+       preAmpGain.gain.setValueAtTime(0, time);
+
+       // Harder velocity = Faster attack
+
+       preAmpGain.gain.linearRampToValueAtTime(attackLevel, time + (0.01 / velocity)); 
+
+       preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5); 
+
+   
+
+       source.connect(preAmpGain);
+
+   
     
 
     // --- 3. DISTORTION STAGE ---
