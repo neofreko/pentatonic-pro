@@ -40,15 +40,22 @@ export class BackingTrackService {
   public setAudioPreset(preset: 'clean' | 'crunch' | 'dreamy') {
     if (this.audioPreset !== preset) {
       this.audioPreset = preset;
-      this.bufferCache.clear();
+      this.bufferCache.clear(); // Recalculate strings for new tone
       console.log(`[BackingTrackService] Audio preset set to ${preset}`);
     }
   }
 
+  /**
+   * Sets the target key for transposition.
+   * @param key - The new root note (e.g., 'G', 'F#')
+   */
   public setTargetKey(key: string) {
     this.targetKey = key;
   }
 
+  /**
+   * Returns the current state of the sequencer for UI updates.
+   */
   public getState(): SequencerState {
     return {
       isPlaying: this.isPlaying,
@@ -64,11 +71,18 @@ export class BackingTrackService {
     return this.track.progression.reduce((acc, chord) => acc + chord.duration, 0);
   }
 
+  /**
+   * Sets the playback tempo.
+   * @param bpm - Beats per minute (40-240).
+   */
   public setTempo(bpm: number) {
     if (bpm < 40 || bpm > 240) throw new Error('Tempo must be between 40 and 240 BPM');
     this.tempo = bpm;
   }
 
+  /**
+   * Loads a backing track and resets the sub-beat counter.
+   */
   public loadTrack(track: BackingTrack) {
     if (!track.progression || track.progression.length === 0) throw new Error('Empty progression');
     this.track = track;
@@ -76,6 +90,9 @@ export class BackingTrackService {
     this.currentSubBeat = 0;
   }
 
+  /**
+   * Starts the playback loop.
+   */
   public async start() {
     this.initAudio();
     if (this.audioCtx?.state === 'suspended') await this.audioCtx.resume();
@@ -85,12 +102,18 @@ export class BackingTrackService {
     this.scheduler();
   }
 
+  /**
+   * Stops the playback and clears timers.
+   */
   public stop() {
     this.isPlaying = false;
     if (this.timerID) clearTimeout(this.timerID as any);
     this.currentSubBeat = 0;
   }
 
+  /**
+   * The core scheduling loop. Uses the Look-ahead pattern.
+   */
   private scheduler() {
     if (!this.isPlaying || !this.audioCtx) return;
     while (this.nextNoteTime < this.audioCtx.currentTime + this.scheduleAheadTime) {
@@ -100,6 +123,9 @@ export class BackingTrackService {
     this.timerID = setTimeout(() => this.scheduler(), this.lookAhead) as any;
   }
 
+  /**
+   * Increments the sequencer by one 8th note.
+   */
   private nextSubBeat() {
     const secondsPerSubBeat = 30.0 / this.tempo;
     this.nextNoteTime += secondsPerSubBeat;
@@ -108,7 +134,9 @@ export class BackingTrackService {
   }
 
   /**
-   * THE ENGINE: Generates genre-specific rhythms
+   * Genre-specific rhythm engine.
+   * Resolves the current chord, transposes it, and triggers instruments
+   * based on the current sub-beat and style.
    */
   private scheduleSubBeat(subBeat: number, time: number) {
     if (!this.audioCtx || !this.track) return;
@@ -172,6 +200,9 @@ export class BackingTrackService {
 
   // --- INSTRUMENTS ---
 
+  /**
+   * Synthesizes a kick drum thump using a frequency sweep.
+   */
   private playKick(time: number) {
     const osc = this.audioCtx!.createOscillator();
     const gain = this.audioCtx!.createGain();
@@ -183,6 +214,9 @@ export class BackingTrackService {
     osc.start(time); osc.stop(time + 0.1);
   }
 
+  /**
+   * Synthesizes a snare drum crack using white noise and a high-pass filter.
+   */
   private playSnare(time: number, vol = 1.0) {
     const buffer = this.audioCtx!.createBuffer(1, this.audioCtx!.sampleRate * 0.1, this.audioCtx!.sampleRate);
     const data = buffer.getChannelData(0);
@@ -195,6 +229,9 @@ export class BackingTrackService {
     noise.start(time); noise.stop(time + 0.1);
   }
 
+  /**
+   * Synthesizes a hi-hat "tick" using a square wave and extreme high-pass filtering.
+   */
   private playHiHat(time: number, vol = 0.5) {
     const osc = this.audioCtx!.createOscillator();
     const gain = this.audioCtx!.createGain();
@@ -205,6 +242,9 @@ export class BackingTrackService {
     osc.start(time); osc.stop(time + 0.05);
   }
 
+  /**
+   * Synthesizes a bass note using a triangle wave in the low register.
+   */
   private playBass(root: string, time: number, vol = 0.3) {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const idx = notes.indexOf(root.toUpperCase().replace('S', '#'));
@@ -218,6 +258,10 @@ export class BackingTrackService {
     osc.start(time); osc.stop(time + 0.4);
   }
 
+  /**
+   * Synthesizes rhythm chords.
+   * Uses polyphonic oscillators. For power chords, applies a distortion chain.
+   */
   private playChord(root: string, quality: string, time: number, vol = 0.5, duration = 1.0) {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const idx = notes.indexOf(root.toUpperCase().replace('S', '#'));
