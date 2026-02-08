@@ -107,35 +107,71 @@ export class BackingTrackService {
 
   private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
     if (!this.audioCtx) return;
-    const osc = this.audioCtx.createOscillator();
-    const distortion = this.audioCtx.createWaveShaper();
-    const filter = this.audioCtx.createBiquadFilter();
-    const gain = this.audioCtx.createGain();
+
+    // 1. Oscillators (The String) - Mix Sawtooth (bite) and Triangle (body)
+    const osc1 = this.audioCtx.createOscillator();
+    const osc2 = this.audioCtx.createOscillator();
+    osc1.type = 'sawtooth';
+    osc2.type = 'triangle';
 
     const freq = 440 * Math.pow(2, (midi - 69) / 12);
-    osc.type = 'sawtooth'; // Richer, more "guitar-like" harmonics
-    osc.frequency.setValueAtTime(freq, time);
+    osc1.frequency.setValueAtTime(freq, time);
+    osc2.frequency.setValueAtTime(freq, time);
+    osc2.detune.setValueAtTime(4, time); // Slight detune for chorus/thickness
 
-    // High Gain Distortion
-    distortion.curve = this.makeDistortionCurve(150);
+    // 2. Pre-Amp Gain (The Pluck & Dynamics) - Drives the distortion
+    // Putting envelope BEFORE distortion makes the tail clean up like a real amp
+    const preGain = this.audioCtx.createGain();
+    preGain.gain.setValueAtTime(0, time);
+    preGain.gain.linearRampToValueAtTime(1.5, time + 0.005); // Fast, hard attack
+    preGain.gain.exponentialRampToValueAtTime(0.8, time + 0.1); // Sustain level
+    preGain.gain.exponentialRampToValueAtTime(0.01, time + duration); // Release
+
+    // 3. Distortion (The Amp)
+    const distortion = this.audioCtx.createWaveShaper();
+    distortion.curve = this.makeDistortionCurve(400); // High gain
     distortion.oversample = '4x';
 
-    // EQ (Low Pass) to reduce harsh high-end "fizz"
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(2500, time);
-    filter.Q.setValueAtTime(1, time);
+    // 4. Cabinet Simulation (The Speaker)
+    // Guitar speakers roll off highs aggressively ~3-5kHz
+    const cabLowPass = this.audioCtx.createBiquadFilter();
+    cabLowPass.type = 'lowpass';
+    cabLowPass.frequency.setValueAtTime(3200, time);
+    cabLowPass.Q.value = 0.7;
 
-    gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(0.4, time + 0.02); // Increased gain
-    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+    // Mid-hump characteristic of guitar tones
+    const cabMidBoost = this.audioCtx.createBiquadFilter();
+    cabMidBoost.type = 'peaking';
+    cabMidBoost.frequency.setValueAtTime(800, time);
+    cabMidBoost.Q.value = 1.2;
+    cabMidBoost.gain.value = 6; // Boost mids
 
-    osc.connect(distortion);
-    distortion.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.audioCtx.destination);
+    // Cut mud
+    const cabHighPass = this.audioCtx.createBiquadFilter();
+    cabHighPass.type = 'highpass';
+    cabHighPass.frequency.setValueAtTime(120, time);
 
-    osc.start(time);
-    osc.stop(time + duration + 0.1);
+    // 5. Master Output
+    const masterGain = this.audioCtx.createGain();
+    masterGain.gain.value = 0.25; // Compensate for high pre-amp gain
+
+    // Routing: Osc -> PreGain -> Distortion -> Cab Sim -> Master -> Out
+    osc1.connect(preGain);
+    osc2.connect(preGain);
+    
+    preGain.connect(distortion);
+    
+    distortion.connect(cabHighPass);
+    cabHighPass.connect(cabLowPass);
+    cabLowPass.connect(cabMidBoost);
+    
+    cabMidBoost.connect(masterGain);
+    masterGain.connect(this.audioCtx.destination);
+
+    osc1.start(time);
+    osc2.start(time);
+    osc1.stop(time + duration + 0.1);
+    osc2.stop(time + duration + 0.1);
   }
 
   public stop() {
