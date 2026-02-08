@@ -105,76 +105,95 @@ export class BackingTrackService {
     });
   }
 
-  private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
-    if (!this.audioCtx) return;
-
-    // 1. Oscillators (The String) - Mix Sawtooth (bite) and Triangle (body)
-    const osc1 = this.audioCtx.createOscillator();
-    const osc2 = this.audioCtx.createOscillator();
-    osc1.type = 'sawtooth';
-    osc2.type = 'triangle';
-
-    const freq = 440 * Math.pow(2, (midi - 69) / 12);
-    osc1.frequency.setValueAtTime(freq, time);
-    osc2.frequency.setValueAtTime(freq, time);
-    osc2.detune.setValueAtTime(4, time); // Slight detune for chorus/thickness
-
-    // 2. Pre-Amp Gain (The Pluck & Dynamics) - Drives the distortion
-    // Putting envelope BEFORE distortion makes the tail clean up like a real amp
-    const preGain = this.audioCtx.createGain();
-    preGain.gain.setValueAtTime(0, time);
-    preGain.gain.linearRampToValueAtTime(1.5, time + 0.005); // Fast, hard attack
-    preGain.gain.exponentialRampToValueAtTime(0.8, time + 0.1); // Sustain level
-    preGain.gain.exponentialRampToValueAtTime(0.01, time + duration); // Release
-
-    // 3. Distortion (The Amp)
-    const distortion = this.audioCtx.createWaveShaper();
-    distortion.curve = this.makeDistortionCurve(400); // High gain
-    distortion.oversample = '4x';
-
-    // 4. Cabinet Simulation (The Speaker)
-    // Guitar speakers roll off highs aggressively ~3-5kHz
-    const cabLowPass = this.audioCtx.createBiquadFilter();
-    cabLowPass.type = 'lowpass';
-    cabLowPass.frequency.setValueAtTime(3200, time);
-    cabLowPass.Q.value = 0.7;
-
-    // Mid-hump characteristic of guitar tones
-    const cabMidBoost = this.audioCtx.createBiquadFilter();
-    cabMidBoost.type = 'peaking';
-    cabMidBoost.frequency.setValueAtTime(800, time);
-    cabMidBoost.Q.value = 1.2;
-    cabMidBoost.gain.value = 6; // Boost mids
-
-    // Cut mud
-    const cabHighPass = this.audioCtx.createBiquadFilter();
-    cabHighPass.type = 'highpass';
-    cabHighPass.frequency.setValueAtTime(120, time);
-
-    // 5. Master Output
-    const masterGain = this.audioCtx.createGain();
-    masterGain.gain.value = 0.25; // Compensate for high pre-amp gain
-
-    // Routing: Osc -> PreGain -> Distortion -> Cab Sim -> Master -> Out
-    osc1.connect(preGain);
-    osc2.connect(preGain);
-    
-    preGain.connect(distortion);
-    
-    distortion.connect(cabHighPass);
-    cabHighPass.connect(cabLowPass);
-    cabLowPass.connect(cabMidBoost);
-    
-    cabMidBoost.connect(masterGain);
-    masterGain.connect(this.audioCtx.destination);
-
-    osc1.start(time);
-    osc2.start(time);
-    osc1.stop(time + duration + 0.1);
-    osc2.stop(time + duration + 0.1);
-  }
-
-  public stop() {
+    private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
+      if (!this.audioCtx) return;
+  
+      // --- 1. THE STRING (Source) ---
+      const osc1 = this.audioCtx.createOscillator();
+      const osc2 = this.audioCtx.createOscillator();
+      osc1.type = 'sawtooth';
+      osc2.type = 'square'; 
+  
+      const freq = 440 * Math.pow(2, (midi - 69) / 12);
+      osc1.frequency.setValueAtTime(freq, time);
+      osc2.frequency.setValueAtTime(freq, time);
+      osc2.detune.setValueAtTime(7, time); 
+  
+      const stringMix = this.audioCtx.createGain();
+      stringMix.gain.value = 0.4;
+      osc1.connect(stringMix);
+      osc2.connect(stringMix);
+  
+      const stringHP = this.audioCtx.createBiquadFilter();
+      stringHP.type = 'highpass';
+      stringHP.frequency.setValueAtTime(350, time);
+      stringMix.connect(stringHP);
+  
+      // --- 2. PRE-AMP (Gain Stage) ---
+      const preAmpGain = this.audioCtx.createGain();
+      preAmpGain.gain.setValueAtTime(0, time);
+      preAmpGain.gain.linearRampToValueAtTime(1.8, time + 0.005);
+      preAmpGain.gain.exponentialRampToValueAtTime(1.0, time + 0.1); 
+      preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+  
+      const preAmpDist = this.audioCtx.createWaveShaper();
+      preAmpDist.curve = this.makeDistortionCurve(60); 
+      preAmpDist.oversample = '4x';
+  
+      stringHP.connect(preAmpGain);
+      preAmpGain.connect(preAmpDist);
+  
+      // --- 3. TONESTACK (EQ) ---
+      const midBoost = this.audioCtx.createBiquadFilter();
+      midBoost.type = 'peaking';
+      midBoost.frequency.setValueAtTime(800, time);
+      midBoost.Q.value = 1.0;
+      midBoost.gain.value = 9; 
+  
+      const trebleShelf = this.audioCtx.createBiquadFilter();
+      trebleShelf.type = 'highshelf';
+      trebleShelf.frequency.setValueAtTime(2500, time);
+      trebleShelf.gain.value = 5;
+  
+      preAmpDist.connect(midBoost);
+      midBoost.connect(trebleShelf);
+  
+      // --- 4. CABINET SIMULATION ---
+      const cabLP1 = this.audioCtx.createBiquadFilter();
+      cabLP1.type = 'lowpass';
+      cabLP1.frequency.setValueAtTime(4000, time);
+      
+      const cabLP2 = this.audioCtx.createBiquadFilter();
+      cabLP2.type = 'lowpass';
+      cabLP2.frequency.setValueAtTime(4000, time);
+  
+      const cabNotch = this.audioCtx.createBiquadFilter();
+      cabNotch.type = 'notch';
+      cabNotch.frequency.setValueAtTime(400, time);
+      cabNotch.Q.value = 0.4;
+  
+      const cabHP = this.audioCtx.createBiquadFilter();
+      cabHP.type = 'highpass';
+      cabHP.frequency.setValueAtTime(100, time);
+  
+      trebleShelf.connect(cabHP);
+      cabHP.connect(cabNotch);
+      cabNotch.connect(cabLP1);
+      cabLP1.connect(cabLP2);
+  
+      // --- 5. MASTER ---
+      const masterGain = this.audioCtx.createGain();
+      masterGain.gain.value = 0.3;
+  
+      cabLP2.connect(masterGain);
+      masterGain.connect(this.audioCtx.destination);
+  
+      osc1.start(time);
+      osc2.start(time);
+      osc1.stop(time + duration + 0.1);
+      osc2.stop(time + duration + 0.1);
+    }
+    public stop() {
     this.isPlaying = false;
     if (this.timerID) {
       clearTimeout(this.timerID as any);
@@ -206,19 +225,24 @@ export class BackingTrackService {
     }
   }
 
-  private makeDistortionCurve(amount: number) {
-    const k = typeof amount === 'number' ? amount : 50;
-    const n_samples = 44100;
-    const curve = new Float32Array(n_samples);
-    const deg = Math.PI / 180;
-    for (let i = 0; i < n_samples; ++i) {
-      const x = (i * 2) / n_samples - 1;
-      curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+    private makeDistortionCurve(amount: number) {
+      const n_samples = 44100;
+      const curve = new Float32Array(n_samples);
+      const k = amount;
+      for (let i = 0; i < n_samples; ++i) {
+        const x = (i * 2) / n_samples - 1;
+        // Asymmetric soft clipping: different curve for positive and negative
+        // This mimics how real tube circuits are biased
+        const xBiased = x + 0.05; 
+        if (xBiased > 0) {
+          curve[i] = (2 / Math.PI) * Math.atan(xBiased * k);
+        } else {
+          curve[i] = (xBiased * 1.5) / (1 + Math.abs(xBiased) * (k / 2));
+        }
+      }
+      return curve;
     }
-    return curve;
-  }
-
-  private scheduleNote(beatNumber: number, time: number) {
+    private scheduleNote(beatNumber: number, time: number) {
     if (!this.audioCtx || !this.track) return;
 
     const beatsPerBar = this.track.timeSignature[0] || 4;
