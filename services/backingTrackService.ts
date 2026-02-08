@@ -108,18 +108,30 @@ export class BackingTrackService {
   private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
     if (!this.audioCtx) return;
     const osc = this.audioCtx.createOscillator();
+    const distortion = this.audioCtx.createWaveShaper();
+    const filter = this.audioCtx.createBiquadFilter();
     const gain = this.audioCtx.createGain();
 
     const freq = 440 * Math.pow(2, (midi - 69) / 12);
-    osc.type = 'triangle';
+    osc.type = 'sawtooth'; // Richer, more "guitar-like" harmonics
     osc.frequency.setValueAtTime(freq, time);
 
+    // High Gain Distortion
+    distortion.curve = this.makeDistortionCurve(150);
+    distortion.oversample = '4x';
+
+    // EQ (Low Pass) to reduce harsh high-end "fizz"
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2500, time);
+    filter.Q.setValueAtTime(1, time);
+
     gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(0.2, time + 0.02);
-    // Envelope matches duration
+    gain.gain.linearRampToValueAtTime(0.4, time + 0.02); // Increased gain
     gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
-    osc.connect(gain);
+    osc.connect(distortion);
+    distortion.connect(filter);
+    filter.connect(gain);
     gain.connect(this.audioCtx.destination);
 
     osc.start(time);
@@ -156,6 +168,18 @@ export class BackingTrackService {
     if (this.currentBeat >= totalBeats) {
       this.currentBeat = 0; // Loop
     }
+  }
+
+  private makeDistortionCurve(amount: number) {
+    const k = typeof amount === 'number' ? amount : 50;
+    const n_samples = 44100;
+    const curve = new Float32Array(n_samples);
+    const deg = Math.PI / 180;
+    for (let i = 0; i < n_samples; ++i) {
+      const x = (i * 2) / n_samples - 1;
+      curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
   }
 
   private scheduleNote(beatNumber: number, time: number) {
