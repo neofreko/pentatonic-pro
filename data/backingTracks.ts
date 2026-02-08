@@ -67,16 +67,16 @@ export const BACKING_TRACKS: BackingTrack[] = [
         description: 'Aggressive and driving rock in E Minor.',
         key: 'E',
         mode: 'minor',
-        tempo: 135,
-        timeSignature: [4, 4],
-        style: 'rock',
-        progression: [
-          { root: 'E', quality: 'minor', duration: 4 },
-          { root: 'C', quality: 'major', duration: 4 },
-          { root: 'D', quality: 'major', duration: 4 },
-          { root: 'E', quality: 'minor', duration: 4 },
-        ],
-        noodleSample: parseNoodle(NOODLE_LIBRARY.rock_hard)
-      }
-    ];
-    
+            tempo: 135,
+            timeSignature: [4, 4],
+            style: 'rock',
+            progression: [
+              { root: 'E', quality: 'power', duration: 4 },
+              { root: 'C', quality: 'power', duration: 4 },
+              { root: 'D', quality: 'power', duration: 4 },
+              { root: 'E', quality: 'power', duration: 4 },
+            ],
+            noodleSample: parseNoodle(NOODLE_LIBRARY.rock_hard)
+          }
+        ];
+        

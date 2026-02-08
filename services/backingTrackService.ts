@@ -1060,20 +1060,41 @@ export class BackingTrackService {
     if (quality === '7') intervals = [0, 4, 7, 10];
     if (quality === 'maj7') intervals = [0, 4, 7, 11];
     if (quality === 'dim') intervals = [0, 3, 6];
+    if (quality === 'power') intervals = [0, 7, 12]; // Root, 5th, Octave (Heavy)
 
     intervals.forEach(interval => {
       const osc = this.audioCtx!.createOscillator();
       const gain = this.audioCtx!.createGain();
+      // For power chords, we want a richer wave (sawtooth) to crunch up
+      const isPower = quality === 'power';
       const freq = 440 * Math.pow(2, (baseMidi + interval - 69) / 12);
 
-      osc.type = 'sine'; // Soft, pad-like sound
+      osc.type = isPower ? 'sawtooth' : 'sine'; 
       osc.frequency.setValueAtTime(freq, time);
 
       gain.gain.setValueAtTime(0, time);
-      gain.gain.linearRampToValueAtTime(0.05, time + 0.1); // Slow attack
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 1.0); // Long decay
+      gain.gain.linearRampToValueAtTime(isPower ? 0.1 : 0.05, time + 0.05); // Harder attack for power chords
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 1.0); 
 
-      osc.connect(gain);
+      // If power chord, maybe route through distortion? 
+      // For now, raw sawtooth will sound buzzy but heavy.
+      // Let's route it through a lowpass to tame the buzz.
+      if (isPower) {
+        const dist = this.audioCtx!.createWaveShaper();
+        dist.curve = this.makeDistortionCurve(50); // Rhythm crunch
+        dist.oversample = '4x';
+
+        const filter = this.audioCtx!.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 2500; // Cabinet sim-ish
+
+        osc.connect(dist);
+        dist.connect(filter);
+        filter.connect(gain);
+      } else {
+        osc.connect(gain);
+      }
+      
       gain.connect(this.audioCtx!.destination);
 
       osc.start(time);

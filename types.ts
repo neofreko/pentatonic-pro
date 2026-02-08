@@ -48,7 +48,7 @@ export type StringFretOffsets = [number, number[]]; // [StringIndex, [FretOffset
 export type PositionMap = Record<number, StringFretOffsets[]>;
 export type ScalePositionData = Record<ScaleType, PositionMap>;
 
-export type ChordQuality = 'major' | 'minor' | '7' | 'maj7' | 'm7' | 'dim' | 'aug' | 'sus4' | '7sus4';
+export type ChordQuality = 'major' | 'minor' | '7' | 'maj7' | 'm7' | 'dim' | 'aug' | 'sus4' | '7sus4' | 'power';
 
 export interface BackingTrackChord {
   root: string; // e.g., 'C', 'F#'
