@@ -183,7 +183,7 @@ const App: React.FC = () => {
   }, [rootNote, scaleType, currentPosition]);
 
   const notesInBox = useMemo(() => {
-    return Array.from(currentPositionNoteIds).map((id: string) => {
+    return Array.from<string>(currentPositionNoteIds).map(id => {
       const [s, f] = id.split('-').map(Number);
       return { id, s, f, midi: MIDI_TUNING[s] + f };
     }).sort((a, b) => a.midi - b.midi);
@@ -196,7 +196,7 @@ const App: React.FC = () => {
     const target = currentChapter.challenge.targetInterval;
 
     // Find candidates that are currently within the visible fretboard
-    const candidates = Array.from(currentPositionNoteIds).filter((id: string) => {
+    const candidates = Array.from<string>(currentPositionNoteIds).filter(id => {
       if (successNoteIds.includes(id)) return false; // Already found
       const [s, f] = id.split('-').map(Number);
       if (f > FRET_COUNT) return false; // Extra safety check
