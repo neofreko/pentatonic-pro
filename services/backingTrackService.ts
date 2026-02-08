@@ -337,27 +337,111 @@ export class BackingTrackService {
 
 
 
-                console.log(`[Sequencer] Scheduling note ${index}: midi=${baseMidi + item.note}, start=${startTime.toFixed(2)}, dur=${playDuration.toFixed(2)}`);
+                        console.log(`[Sequencer] Scheduling note ${index}: midi=${baseMidi + item.note}, start=${startTime.toFixed(2)}, dur=${playDuration.toFixed(2)}`);
+
+
+
+        
+
+
+
+                        
+
+
+
+        
+
+
+
+                        this.playGuitarNote(
+
+
+
+        
+
+
+
+                          baseMidi + item.note, 
+
+
+
+        
+
+
+
+                          startTime, 
+
+
+
+        
+
+
+
+                          playDuration, 
+
+
+
+        
+
+
+
+                          item.velocity || 0.8,
+
+
+
+        
+
+
+
+                          item.articulation,
+
+
+
+        
+
+
+
+                          item.bendAmount
+
+
+
+        
+
+
+
+                        );
+
+
+
+        
+
+
+
+                      }
+
+
+
+        
+
+
+
+                      accumulatedTime += durationSec;
+
+
+
+        
+
+
+
+                    });
+
+
+
+        
 
 
 
                 
-
-
-
-                this.playGuitarNote(baseMidi + item.note, startTime, playDuration, item.velocity || 0.8);
-
-
-
-              }
-
-
-
-              accumulatedTime += durationSec;
-
-
-
-            });
 
 
 
@@ -457,71 +541,121 @@ export class BackingTrackService {
 
    * 
 
-      * @param midi - The MIDI note number.
+         * @param duration - Duration of the note in seconds.
 
-      * @param time - The AudioContext time to start playback.
+         * @param velocity - 0.0 to 1.0, controls volume and attack bite.
 
-      * @param duration - Duration of the note in seconds.
+         * @param articulation - Type of expression (bend, slide, hammer).
 
-      * @param velocity - 0.0 to 1.0, controls volume and attack bite.
+         * @param bendAmount - Pitch change in semitones.
 
-      */
+         */
 
-     private playGuitarNote(midi: number, time: number, duration: number = 0.8, velocity: number = 0.8) {
+        private playGuitarNote(
 
-       if (!this.audioCtx) return;
+          midi: number, 
 
-   
+          time: number, 
 
-       const freq = 440 * Math.pow(2, (midi - 69) / 12);
+          duration: number = 0.8, 
 
-       
+          velocity: number = 0.8,
 
-       // Check cache (we might want to vary this by velocity later, but for now cache pitch)
+          articulation?: 'bend' | 'slide' | 'hammer' | 'pull',
 
-       const cacheKey = Math.round(freq * 100); 
+          bendAmount: number = 0
 
-       let stringBuffer = this.bufferCache.get(cacheKey);
+        ) {
 
-       
+          if (!this.audioCtx) return;
 
-       if (!stringBuffer) {
+      
 
-         stringBuffer = this.generateStringBuffer(freq, 3.0);
+          const freq = 440 * Math.pow(2, (midi - 69) / 12);
 
-         this.bufferCache.set(cacheKey, stringBuffer);
+          
 
-       }
+          // Check cache (we might want to vary this by velocity later, but for now cache pitch)
 
-       
+          const cacheKey = Math.round(freq * 100); 
 
-       const source = this.audioCtx.createBufferSource();
+          let stringBuffer = this.bufferCache.get(cacheKey);
 
-       source.buffer = stringBuffer;
+          
 
-   
+          if (!stringBuffer) {
 
-       // --- 2. PRE-AMP (Gain Stage) ---
+            stringBuffer = this.generateStringBuffer(freq, 3.0);
 
-       // Velocity scales the input gain
+            this.bufferCache.set(cacheKey, stringBuffer);
 
-       const preAmpGain = this.audioCtx.createGain();
+          }
 
-       const attackLevel = 1.0 * velocity; 
+          
 
-       
+          const source = this.audioCtx.createBufferSource();
 
-       preAmpGain.gain.setValueAtTime(0, time);
+          source.buffer = stringBuffer;
 
-       // Harder velocity = Faster attack
+      
 
-       preAmpGain.gain.linearRampToValueAtTime(attackLevel, time + (0.01 / velocity)); 
+          // --- ARTICULATION: PITCH MODULATION ---
 
-       preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5); 
+          if (articulation === 'bend' && bendAmount !== 0) {
 
-   
+            // Start at pitch, bend UP to target
 
-       source.connect(preAmpGain);
+            source.playbackRate.setValueAtTime(1.0, time);
+
+            const targetRate = Math.pow(2, bendAmount / 12);
+
+            // Fast bend or slow bend? Let's do a bluesy slow bend (0.3s)
+
+            source.playbackRate.exponentialRampToValueAtTime(targetRate, time + 0.3);
+
+          } else if (articulation === 'slide') {
+
+            // Slide INTO the note from 2 semitones below
+
+            const startRate = Math.pow(2, -2 / 12);
+
+            source.playbackRate.setValueAtTime(startRate, time);
+
+            source.playbackRate.linearRampToValueAtTime(1.0, time + 0.15); // Fast slide
+
+          }
+
+      
+
+          // --- 2. PRE-AMP (Gain Stage) ---
+
+          // Velocity scales the input gain
+
+          const preAmpGain = this.audioCtx.createGain();
+
+          
+
+          // For Hammer/Pull, we want a softer attack to simulate finger noise without picking
+
+          const isLegato = articulation === 'hammer' || articulation === 'pull';
+
+          const attackLevel = 1.0 * (isLegato ? velocity * 0.7 : velocity); 
+
+          const attackTime = isLegato ? 0.05 : (0.01 / velocity); // Slower attack for legato
+
+      
+
+          preAmpGain.gain.setValueAtTime(0, time);
+
+          preAmpGain.gain.linearRampToValueAtTime(attackLevel, time + attackTime); 
+
+          preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5); 
+
+      
+
+          source.connect(preAmpGain);
+
+      
 
    
     

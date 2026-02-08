@@ -60,6 +60,8 @@ export interface MelodyNote {
   note: number | null; // MIDI offset relative to root. null for rest.
   duration: number; // Duration in beats (e.g., 0.5 for eighth note)
   velocity?: number; // 0.0 to 1.0 (default 0.8). Controls attack and volume.
+  articulation?: 'bend' | 'slide' | 'hammer' | 'pull';
+  bendAmount?: number; // Semitones to bend (e.g., 1, 2, or 0.5 for microtonal)
 }
 
 export interface BackingTrack {
