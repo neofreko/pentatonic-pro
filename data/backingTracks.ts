@@ -59,6 +59,24 @@ export const BACKING_TRACKS: BackingTrack[] = [
       { root: 'D', quality: 'minor', duration: 4 },
       { root: 'E', quality: '7', duration: 4 },
     ],
-    noodleSample: parseNoodle(NOODLE_LIBRARY.soul_maggot)
-  }
-];
+        noodleSample: parseNoodle(NOODLE_LIBRARY.soul_maggot)
+      },
+      {
+        id: 'hard-rock-e',
+        name: 'Hard Rock Groove',
+        description: 'Aggressive and driving rock in E Minor.',
+        key: 'E',
+        mode: 'minor',
+        tempo: 135,
+        timeSignature: [4, 4],
+        style: 'rock',
+        progression: [
+          { root: 'E', quality: 'minor', duration: 4 },
+          { root: 'C', quality: 'major', duration: 4 },
+          { root: 'D', quality: 'major', duration: 4 },
+          { root: 'E', quality: 'minor', duration: 4 },
+        ],
+        noodleSample: parseNoodle(NOODLE_LIBRARY.rock_hard)
+      }
+    ];
+    
