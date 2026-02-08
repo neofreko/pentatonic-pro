@@ -1,1104 +1,319 @@
-
 import { BackingTrack, SequencerState } from '../types';
 
 /**
-
  * Service class responsible for scheduling and synthesizing backing tracks.
-
  * 
-
- * Features:
-
- * - Precision scheduling using the "Look-ahead" pattern (Web Audio API).
-
- * - Polyphonic sequencing for Drums, Bass, and Harmony.
-
- * - Karplus-Strong physical modeling for realistic guitar string synthesis.
-
- * - JCM 800-inspired Amplifier and Cabinet simulation.
-
- * - Real-time transposition and tempo adjustment.
-
+ * High-Resolution Refactor:
+ * - Supports 8th-note sub-beat resolution for realistic rock and blues grooves.
+ * - Pattern-based rhythm engine for Drums, Bass, and Chords.
+ * - Karplus-Strong physical modeling for guitar lead.
  */
-
 export class BackingTrackService {
-
   private audioCtx: AudioContext | null = null;
-
   private track: BackingTrack | null = null;
-
   private targetKey: string = 'A';
-
   private isPlaying: boolean = false;
-
   
-
   // Scheduling state
-
-  private currentBeat: number = 0;
-
+  private currentSubBeat: number = 0; // 8th notes (0-7 for a 4/4 bar)
   private tempo: number = 120;
-
   private nextNoteTime: number = 0;
-
-    private timerID: number | null = null;
-
-    
-
-    // AudioBuffer cache: Map<Frequency, AudioBuffer>
-
-    private bufferCache: Map<number, AudioBuffer> = new Map();
-
-    
-
-    // Scheduler tuning
-
+  private timerID: number | null = null;
   
-
-  private lookAhead: number = 25.0; // ms to sleep between scheduling checks
-
-  private scheduleAheadTime: number = 0.1; // seconds to schedule into the future
-
+  // AudioBuffer cache for Karplus-Strong Lead
+  private bufferCache: Map<number, AudioBuffer> = new Map();
   
-
+  // Scheduler tuning
+  private lookAhead: number = 25.0; 
+  private scheduleAheadTime: number = 0.1; 
+  
   private audioPreset: 'clean' | 'crunch' | 'dreamy' = 'clean';
-
-
 
   constructor() {}
 
-
-
-  /**
-
-   * Initializes the AudioContext if it doesn't exist.
-
-   * Must be called after a user interaction to unlock audio in browsers.
-
-   */
-
   private initAudio() {
-
     if (!this.audioCtx) {
-
       this.audioCtx = new AudioContext();
-
     }
-
   }
 
-
-
-  /**
-
-   * Sets the global audio preset affecting the guitar tone.
-
-   * @param preset - 'clean' (Sparkly), 'crunch' (JCM800), or 'dreamy' (Ambient Delay)
-
-   */
-
-    public setAudioPreset(preset: 'clean' | 'crunch' | 'dreamy') {
-
-      if (this.audioPreset !== preset) {
-
-        this.audioPreset = preset;
-
-        this.bufferCache.clear(); // Recalculate strings for new tone
-
-        console.log(`[BackingTrackService] Audio preset set to ${preset} (Cache cleared)`);
-
-      }
-
+  public setAudioPreset(preset: 'clean' | 'crunch' | 'dreamy') {
+    if (this.audioPreset !== preset) {
+      this.audioPreset = preset;
+      this.bufferCache.clear();
+      console.log(`[BackingTrackService] Audio preset set to ${preset}`);
     }
-
-  
-
-
-
-  /**
-
-   * Sets the target key for transposition. All chords and melodies will be
-
-   * shifted relative to the track's original key.
-
-   * @param key - The new root note (e.g., 'G', 'F#')
-
-   */
+  }
 
   public setTargetKey(key: string) {
-
     this.targetKey = key;
-
-    console.log(`[BackingTrackService] Target key set to ${key}`);
-
   }
-
-
-
-  /**
-
-   * Returns the current state of the sequencer for UI updates.
-
-   */
 
   public getState(): SequencerState {
-
     return {
-
       isPlaying: this.isPlaying,
-
-      currentBeat: this.currentBeat,
-
-      currentBar: Math.floor(this.currentBeat / (this.track?.timeSignature[0] || 4)) + 1,
-
+      currentBeat: Math.floor(this.currentSubBeat / 2),
+      currentBar: Math.floor(this.currentSubBeat / ((this.track?.timeSignature[0] || 4) * 2)) + 1,
       totalBeats: this.calculateTotalBeats(),
-
       tempo: this.tempo
-
     };
-
   }
-
-
 
   private calculateTotalBeats(): number {
-
     if (!this.track) return 0;
-
     return this.track.progression.reduce((acc, chord) => acc + chord.duration, 0);
-
   }
-
-
 
   public setTempo(bpm: number) {
-
-    if (bpm < 40 || bpm > 240) {
-
-      console.error(`[BackingTrackService] Invalid tempo: ${bpm}. Must be 40-240.`);
-
-      throw new Error('Tempo must be between 40 and 240 BPM');
-
-    }
-
+    if (bpm < 40 || bpm > 240) throw new Error('Tempo must be between 40 and 240 BPM');
     this.tempo = bpm;
-
-    console.log(`[BackingTrackService] Tempo set to ${bpm} BPM`);
-
   }
-
-
-
-  /**
-
-   * Loads a backing track and resets the sequencer.
-
-   * @param track - The BackingTrack object containing progression and metadata.
-
-   */
 
   public loadTrack(track: BackingTrack) {
-
-    if (!track.progression || track.progression.length === 0) {
-
-      console.error('[BackingTrackService] Load failed: Empty progression.');
-
-      throw new Error('Progression must contain at least one chord');
-
-    }
-
+    if (!track.progression || track.progression.length === 0) throw new Error('Empty progression');
     this.track = track;
-
     this.tempo = track.tempo;
-
-    this.currentBeat = 0;
-
-    console.log(`[BackingTrackService] Loaded track: ${track.name}`);
-
+    this.currentSubBeat = 0;
   }
-
-
-
-  /**
-
-   * Starts the sequencer. Resumes AudioContext if suspended.
-
-   */
 
   public async start() {
-
     this.initAudio();
-
-    if (this.audioCtx?.state === 'suspended') {
-
-      await this.audioCtx.resume();
-
-    }
-
-
-
+    if (this.audioCtx?.state === 'suspended') await this.audioCtx.resume();
     if (this.isPlaying) return;
-
-
-
     this.isPlaying = true;
-
     this.nextNoteTime = this.audioCtx!.currentTime;
-
     this.scheduler();
-
-    console.log('[BackingTrackService] Playback started');
-
   }
-
-
-
-  /**
-
-   * Plays the "Noodle Sample" melody using the Karplus-Strong guitar synth.
-
-   * Adapts to the current key and audio preset.
-
-   */
-
-  public async playNoodle() {
-
-    this.initAudio();
-
-    if (this.audioCtx?.state === 'suspended') {
-
-      await this.audioCtx.resume();
-
-    }
-
-    
-
-    if (!this.track?.noodleSample || !this.audioCtx) return;
-
-
-
-    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-    const targetKeyIndex = notes.indexOf(this.targetKey.toUpperCase().replace('S', '#'));
-
-    
-
-    // Base MIDI for guitar range (Octave 4)
-
-    const baseMidi = 48 + (targetKeyIndex === -1 ? 9 : targetKeyIndex); 
-
-    const secondsPerBeat = 60.0 / this.tempo;
-
-    
-
-    const now = this.audioCtx.currentTime;
-
-    let accumulatedTime = 0;
-
-
-
-            this.track.noodleSample.forEach((item, index) => {
-
-
-
-              const durationSec = item.duration * secondsPerBeat;
-
-
-
-              if (item.note !== null) {
-
-
-
-                const playDuration = durationSec * 0.95; 
-
-
-
-                
-
-
-
-                // Humanization: Micro-timing (Groove)
-
-
-
-                // Add random jitter +/- 15ms, but keep the first note tight
-
-
-
-                const jitter = index === 0 ? 0 : (Math.random() * 0.03 - 0.015);
-
-
-
-                const startTime = now + accumulatedTime + jitter;
-
-
-
-        
-
-
-
-                        console.log(`[Sequencer] Scheduling note ${index}: midi=${baseMidi + item.note}, start=${startTime.toFixed(2)}, dur=${playDuration.toFixed(2)}`);
-
-
-
-        
-
-
-
-                        
-
-
-
-        
-
-
-
-                        this.playGuitarNote(
-
-
-
-        
-
-
-
-                          baseMidi + item.note, 
-
-
-
-        
-
-
-
-                          startTime, 
-
-
-
-        
-
-
-
-                          playDuration, 
-
-
-
-        
-
-
-
-                          item.velocity || 0.8,
-
-
-
-        
-
-
-
-                          item.articulation,
-
-
-
-        
-
-
-
-                          item.bendAmount
-
-
-
-        
-
-
-
-                        );
-
-
-
-        
-
-
-
-                      }
-
-
-
-        
-
-
-
-                      accumulatedTime += durationSec;
-
-
-
-        
-
-
-
-                    });
-
-
-
-        
-
-
-
-                
-
-
-
-            console.log(`[Sequencer] Total phrase duration: ${accumulatedTime.toFixed(2)} seconds`);
-
-
-
-          }
-
-
-
-        
-
-
-
-    
-
-
-
-  /**
-
-   * Generates a Karplus-Strong string buffer.
-
-   * This physically models a plucked string by looping noise through a low-pass delay line.
-
-   * 
-
-   * @param frequency - The fundamental frequency of the note.
-
-   * @param duration - Length of the buffer in seconds.
-
-   * @returns An AudioBuffer containing the generated string sound.
-
-   */
-
-  private generateStringBuffer(frequency: number, duration: number): AudioBuffer {
-
-    if (!this.audioCtx) throw new Error('No Audio Context');
-
-
-
-    const sampleRate = this.audioCtx.sampleRate;
-
-    // Calculate period (length of the string in samples)
-
-    const N = Math.round(sampleRate / frequency);
-
-    
-
-    // Total duration samples
-
-    const length = sampleRate * duration;
-
-    const buffer = this.audioCtx.createBuffer(1, length, sampleRate);
-
-    const data = buffer.getChannelData(0);
-
-
-
-    // 1. "Excite" the string (The Pick)
-
-    // Fill the first period (N samples) with white noise
-
-    for (let i = 0; i < N; i++) {
-
-      data[i] = Math.random() * 2 - 1;
-
-    }
-
-
-
-                // 2. String Decay (The Vibration)
-                // Loop through the rest of the buffer, averaging previous samples (Low Pass Filter)
-                const decay = this.audioPreset === 'clean' ? 0.998 : 0.995;
-                
-                for (let i = N; i < length; i++) {
-                  const val = 0.5 * (data[i - N] + (i - N - 1 >= 0 ? data[i - N - 1] : 0));
-                  data[i] = val * decay;
-                }
-                  
-
-      
-
-
-
-    return buffer;
-
-  }
-
-
-
-  /**
-
-   * Synthesizes a guitar note using physical modeling (Karplus-Strong) fed into
-
-   * a simulated amplifier chain (Pre-Amp -> Distortion -> Cabinet -> Effects).
-
-   * 
-
-         * @param duration - Duration of the note in seconds.
-
-         * @param velocity - 0.0 to 1.0, controls volume and attack bite.
-
-         * @param articulation - Type of expression (bend, slide, hammer).
-
-         * @param bendAmount - Pitch change in semitones.
-
-         */
-
-        private playGuitarNote(
-
-          midi: number, 
-
-          time: number, 
-
-          duration: number = 0.8, 
-
-          velocity: number = 0.8,
-
-          articulation?: 'bend' | 'slide' | 'hammer' | 'pull',
-
-          bendAmount: number = 0
-
-        ) {
-
-          if (!this.audioCtx) return;
-
-      
-
-          const freq = 440 * Math.pow(2, (midi - 69) / 12);
-
-          
-
-          // Check cache (we might want to vary this by velocity later, but for now cache pitch)
-
-          const cacheKey = Math.round(freq * 100); 
-
-          let stringBuffer = this.bufferCache.get(cacheKey);
-
-          
-
-          if (!stringBuffer) {
-
-            stringBuffer = this.generateStringBuffer(freq, 3.0);
-
-            this.bufferCache.set(cacheKey, stringBuffer);
-
-          }
-
-          
-
-          const source = this.audioCtx.createBufferSource();
-
-          source.buffer = stringBuffer;
-
-      
-
-          // --- ARTICULATION: PITCH MODULATION ---
-
-          if (articulation === 'bend' && bendAmount !== 0) {
-
-            // Start at pitch, bend UP to target
-
-            source.playbackRate.setValueAtTime(1.0, time);
-
-            const targetRate = Math.pow(2, bendAmount / 12);
-
-            // Fast bend or slow bend? Let's do a bluesy slow bend (0.3s)
-
-            source.playbackRate.exponentialRampToValueAtTime(targetRate, time + 0.3);
-
-          } else if (articulation === 'slide') {
-
-            // Slide INTO the note from 2 semitones below
-
-            const startRate = Math.pow(2, -2 / 12);
-
-            source.playbackRate.setValueAtTime(startRate, time);
-
-            source.playbackRate.linearRampToValueAtTime(1.0, time + 0.15); // Fast slide
-
-          }
-
-      
-
-          // --- 2. PRE-AMP (Gain Stage) ---
-
-          // Velocity scales the input gain
-
-          const preAmpGain = this.audioCtx.createGain();
-
-          
-
-          // For Hammer/Pull, we want a softer attack to simulate finger noise without picking
-
-          const isLegato = articulation === 'hammer' || articulation === 'pull';
-
-          const attackLevel = 1.0 * (isLegato ? velocity * 0.7 : velocity); 
-
-          const attackTime = isLegato ? 0.05 : (0.01 / velocity); // Slower attack for legato
-
-      
-
-          preAmpGain.gain.setValueAtTime(0, time);
-
-          preAmpGain.gain.linearRampToValueAtTime(attackLevel, time + attackTime); 
-
-          preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5); 
-
-      
-
-          source.connect(preAmpGain);
-
-      
-
-   
-    
-
-    // --- 3. DISTORTION STAGE ---
-
-    const distGain = this.audioCtx.createGain();
-
-    // Drive the distortion harder for crunch/dreamy
-
-    distGain.gain.value = this.audioPreset === 'clean' ? 1.5 : 50; 
-
-
-
-    const distortion = this.audioCtx.createWaveShaper();
-
-    distortion.curve = this.makeDistortionCurve(this.audioPreset === 'clean' ? 5 : 200);
-
-    distortion.oversample = '4x';
-
-
-
-    preAmpGain.connect(distGain);
-
-    distGain.connect(distortion);
-
-
-
-    // --- 4. TONESTACK & CABINET ---
-
-    // Marshall-style EQ to shape the distorted signal
-
-    const midBoost = this.audioCtx.createBiquadFilter();
-
-    midBoost.type = 'peaking';
-
-    midBoost.frequency.setValueAtTime(800, time);
-
-    midBoost.Q.value = 1.0;
-
-    midBoost.gain.value = 6;
-
-
-
-    const cabLP = this.audioCtx.createBiquadFilter();
-
-    cabLP.type = 'lowpass';
-
-    cabLP.frequency.setValueAtTime(3500, time); // Speaker rolloff
-
-
-
-    const cabHP = this.audioCtx.createBiquadFilter();
-
-    cabHP.type = 'highpass';
-
-    cabHP.frequency.setValueAtTime(100, time); // Remove sub-rumble
-
-
-
-    distortion.connect(midBoost);
-
-    midBoost.connect(cabHP);
-
-    cabHP.connect(cabLP);
-
-
-
-    // --- 5. MASTER & EFFECTS ---
-
-    const masterGain = this.audioCtx.createGain();
-
-    // Compensate for the massive gain in distortion stage
-
-    masterGain.gain.value = this.audioPreset === 'clean' ? 0.4 : 0.05;
-
-
-
-    // Basic Delay for 'Dreamy'
-
-    if (this.audioPreset === 'dreamy') {
-
-      const delay = this.audioCtx.createDelay();
-
-      delay.delayTime.value = 0.35;
-
-      const delayFeedback = this.audioCtx.createGain();
-
-      delayFeedback.gain.value = 0.4;
-
-      
-
-      cabLP.connect(delay);
-
-      delay.connect(delayFeedback);
-
-      delayFeedback.connect(delay);
-
-      delay.connect(masterGain);
-
-      cabLP.connect(masterGain);
-
-    } else {
-
-      cabLP.connect(masterGain);
-
-    }
-
-
-
-    masterGain.connect(this.audioCtx.destination);
-
-    source.start(time);
-    source.stop(time + duration + 2.0);
-  }
-
-
 
   public stop() {
-
     this.isPlaying = false;
-
-    if (this.timerID) {
-
-      clearTimeout(this.timerID as any);
-
-      this.timerID = null;
-
-    }
-
-    this.currentBeat = 0;
-
-    console.log('[BackingTrackService] Playback stopped');
-
+    if (this.timerID) clearTimeout(this.timerID as any);
+    this.currentSubBeat = 0;
   }
-
-
-
-  /**
-
-   * The core scheduling loop.
-
-   * Checks for notes that need to be played in the next `scheduleAheadTime` window.
-
-   */
 
   private scheduler() {
-
     if (!this.isPlaying || !this.audioCtx) return;
-
-
-
     while (this.nextNoteTime < this.audioCtx.currentTime + this.scheduleAheadTime) {
-
-      this.scheduleNote(this.currentBeat, this.nextNoteTime);
-
-      this.nextBeat();
-
+      this.scheduleSubBeat(this.currentSubBeat, this.nextNoteTime);
+      this.nextSubBeat();
     }
-
-    
-
     this.timerID = setTimeout(() => this.scheduler(), this.lookAhead) as any;
-
   }
 
-
-
-  private nextBeat() {
-
-    const secondsPerBeat = 60.0 / this.tempo;
-
-    this.nextNoteTime += secondsPerBeat;
-
-    
-
-    const totalBeats = this.calculateTotalBeats();
-
-    this.currentBeat++;
-
-    if (this.currentBeat >= totalBeats) {
-
-      this.currentBeat = 0; // Loop
-
-    }
-
+  private nextSubBeat() {
+    const secondsPerSubBeat = 30.0 / this.tempo;
+    this.nextNoteTime += secondsPerSubBeat;
+    const totalSubBeats = this.calculateTotalBeats() * 2;
+    this.currentSubBeat = (this.currentSubBeat + 1) % totalSubBeats;
   }
-
-
 
   /**
-
-   * Creates a sigmoid distortion curve for the WaveShaperNode.
-
-   * Can be configured for soft clipping (low amounts) or hard fuzz (high amounts).
-
+   * THE ENGINE: Generates genre-specific rhythms
    */
-
-  private makeDistortionCurve(amount: number) {
-
-    const n_samples = 44100;
-
-    const curve = new Float32Array(n_samples);
-
-    const k = amount;
-
-    for (let i = 0; i < n_samples; ++i) {
-
-      const x = (i * 2) / n_samples - 1;
-
-      // Asymmetric soft clipping: different curve for positive and negative
-
-      // This mimics how real tube circuits are biased
-
-      const xBiased = x + 0.05; 
-
-      if (xBiased > 0) {
-
-        curve[i] = (2 / Math.PI) * Math.atan(xBiased * k);
-
-      } else {
-
-        curve[i] = (xBiased * 1.5) / (1 + Math.abs(xBiased) * (k / 2));
-
-      }
-
-    }
-
-    return curve;
-
-  }
-
-
-
-  private scheduleNote(beatNumber: number, time: number) {
-
-
+  private scheduleSubBeat(subBeat: number, time: number) {
     if (!this.audioCtx || !this.track) return;
 
-    const beatsPerBar = this.track.timeSignature[0] || 4;
-    const barBeat = beatNumber % beatsPerBar;
+    const subBeatsPerBar = (this.track.timeSignature[0] || 4) * 2;
+    const barSubBeat = subBeat % subBeatsPerBar;
+    const beat = Math.floor(subBeat / 2);
     
-    // Find current chord
-    let accumulatedBeats = 0;
+    // Find chord
+    let acc = 0;
     let currentChord = this.track.progression[0];
-    for (const chord of this.track.progression) {
-      if (beatNumber < accumulatedBeats + chord.duration) {
-        currentChord = chord;
-        break;
-      }
-      accumulatedBeats += chord.duration;
+    for (const c of this.track.progression) {
+      if (beat < acc + c.duration) { currentChord = c; break; }
+      acc += c.duration;
     }
 
-    // --- TRANSPOSITION LOGIC ---
+    // Transpose
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const trackKeyIndex = notes.indexOf(this.track.key.toUpperCase().replace('S', '#'));
-    const targetKeyIndex = notes.indexOf(this.targetKey.toUpperCase().replace('S', '#'));
-    const chordRootIndex = notes.indexOf(currentChord.root.toUpperCase().replace('S', '#'));
+    const trackKeyIdx = notes.indexOf(this.track.key.toUpperCase().replace('S', '#'));
+    const targetKeyIdx = notes.indexOf(this.targetKey.toUpperCase().replace('S', '#'));
+    const chordRootIdx = notes.indexOf(currentChord.root.toUpperCase().replace('S', '#'));
+    const interval = (targetKeyIdx - trackKeyIdx + 12) % 12;
+    const root = notes[(chordRootIdx + interval) % 12];
 
-    if (trackKeyIndex !== -1 && targetKeyIndex !== -1 && chordRootIndex !== -1) {
-      const interval = (targetKeyIndex - trackKeyIndex + 12) % 12;
-      const transposedRootIndex = (chordRootIndex + interval) % 12;
-      const transposedRoot = notes[transposedRootIndex];
+    // --- GENRE LOGIC ---
+    if (this.track.style === 'rock') {
+      // DRUMS: Driving 8th note rock
+      if (barSubBeat === 0 || barSubBeat === 4 || barSubBeat === 5) this.playKick(time);
+      if (barSubBeat === 2 || barSubBeat === 6) this.playSnare(time);
+      this.playHiHat(time, barSubBeat % 2 === 0 ? 0.8 : 0.4);
 
-      // --- DRUMS ---
-      if (this.track.style === 'rock' || this.track.style === 'funk') {
-        if (barBeat === 0 || barBeat === 2) {
-          this.playKick(time);
-        } else if (barBeat === 1 || barBeat === 3) {
-          this.playSnare(time);
-        }
-        this.playHiHat(time);
-      } else if (this.track.style === 'blues') {
-        this.playKick(time);
-        if (barBeat === 1 || barBeat === 3) {
-          this.playSnare(time, 0.5);
-        }
-        this.playHiHat(time);
-      }
+      // RHYTHM: Eighth-note chugging power chords
+      const isDownbeat = barSubBeat % 4 === 0;
+      const velocity = isDownbeat ? 1.0 : 0.6;
+      const duration = isDownbeat ? 0.4 : 0.15; // Palm mute on off-beats
+      this.playChord(root, currentChord.quality, time, velocity, duration);
 
-      // --- BASS ---
-      this.playBass(transposedRoot, time);
+      // BASS: Eighth notes following the root
+      this.playBass(root, time, isDownbeat ? 0.8 : 0.5);
+    } 
+    else if (this.track.style === 'blues') {
+      // Shuffle feel (swinging the 8ths is hard without 16ths, but we'll accent)
+      if (barSubBeat === 0 || barSubBeat === 4) this.playKick(time);
+      if (barSubBeat === 2 || barSubBeat === 6) this.playSnare(time, 0.4);
+      if (barSubBeat % 2 === 0) this.playHiHat(time, 0.6);
 
-      // --- CHORDS ---
-      // Play full chord on the first beat of every bar
-      if (barBeat === 0) {
-        this.playChord(transposedRoot, currentChord.quality, time);
-      }
+      // Chords on every beat
+      if (subBeat % 2 === 0) this.playChord(root, currentChord.quality, time, 0.7, 0.8);
+      // Bass on every beat
+      if (subBeat % 2 === 0) this.playBass(root, time, 0.7);
+    }
+    else {
+      // Funk/Soul default
+      if (barSubBeat === 0) this.playKick(time);
+      if (barSubBeat === 4) this.playSnare(time);
+      if (barSubBeat % 2 === 0) this.playHiHat(time, 0.3);
+      if (barSubBeat === 0) this.playChord(root, currentChord.quality, time, 0.6, 2.0);
+      if (subBeat % 2 === 0) this.playBass(root, time, 0.6);
     }
   }
+
+  // --- INSTRUMENTS ---
 
   private playKick(time: number) {
-    if (!this.audioCtx) return;
-    const osc = this.audioCtx.createOscillator();
-    const gain = this.audioCtx.createGain();
-
+    const osc = this.audioCtx!.createOscillator();
+    const gain = this.audioCtx!.createGain();
     osc.frequency.setValueAtTime(150, time);
     osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
-
     gain.gain.setValueAtTime(1, time);
     gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-
-    osc.connect(gain);
-    gain.connect(this.audioCtx.destination);
-
-    osc.start(time);
-    osc.stop(time + 0.1);
+    osc.connect(gain); gain.connect(this.audioCtx!.destination);
+    osc.start(time); osc.stop(time + 0.1);
   }
 
-  private playSnare(time: number, volume = 1.0) {
-    if (!this.audioCtx) return;
-    const bufferSize = this.audioCtx.sampleRate * 0.1;
-    const buffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
+  private playSnare(time: number, vol = 1.0) {
+    const buffer = this.audioCtx!.createBuffer(1, this.audioCtx!.sampleRate * 0.1, this.audioCtx!.sampleRate);
     const data = buffer.getChannelData(0);
-
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-
-    const noise = this.audioCtx.createBufferSource();
-    noise.buffer = buffer;
-
-    const filter = this.audioCtx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.value = 1000;
-
-    const gain = this.audioCtx.createGain();
-    gain.gain.setValueAtTime(0.2 * volume, time);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const noise = this.audioCtx!.createBufferSource(); noise.buffer = buffer;
+    const filter = this.audioCtx!.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 1000;
+    const gain = this.audioCtx!.createGain(); gain.gain.setValueAtTime(0.2 * vol, time);
     gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.audioCtx.destination);
-
-    noise.start(time);
-    noise.stop(time + 0.1);
+    noise.connect(filter); filter.connect(gain); gain.connect(this.audioCtx!.destination);
+    noise.start(time); noise.stop(time + 0.1);
   }
 
-  private playHiHat(time: number) {
-    if (!this.audioCtx) return;
-    const osc = this.audioCtx.createOscillator();
-    const gain = this.audioCtx.createGain();
-
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(10000, time);
-
-    const filter = this.audioCtx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.value = 7000;
-
-    gain.gain.setValueAtTime(0.05, time);
-    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.audioCtx.destination);
-
-    osc.start(time);
-    osc.stop(time + 0.05);
+  private playHiHat(time: number, vol = 0.5) {
+    const osc = this.audioCtx!.createOscillator();
+    const gain = this.audioCtx!.createGain();
+    osc.type = 'square'; osc.frequency.setValueAtTime(10000, time);
+    const filter = this.audioCtx!.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 7000;
+    gain.gain.setValueAtTime(0.05 * vol, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+    osc.connect(filter); filter.connect(gain); gain.connect(this.audioCtx!.destination);
+    osc.start(time); osc.stop(time + 0.05);
   }
 
-  private playBass(root: string, time: number) {
-    if (!this.audioCtx) return;
-    const osc = this.audioCtx.createOscillator();
-    const gain = this.audioCtx.createGain();
-
-    // Map note to MIDI then to frequency
+  private playBass(root: string, time: number, vol = 0.3) {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const rootIndex = notes.indexOf(root.toUpperCase().replace('S', '#'));
-    if (rootIndex === -1) return;
-
-    // Bass octave 1 or 2
-    const midi = 24 + rootIndex; 
-    const freq = 440 * Math.pow(2, (midi - 69) / 12);
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, time);
-
-    gain.gain.setValueAtTime(0.3, time);
-    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
-
-    osc.connect(gain);
-    gain.connect(this.audioCtx.destination);
-
-    osc.start(time);
-    osc.stop(time + 0.4);
+    const idx = notes.indexOf(root.toUpperCase().replace('S', '#'));
+    if (idx === -1) return;
+    const freq = 440 * Math.pow(2, (24 + idx - 69) / 12);
+    const osc = this.audioCtx!.createOscillator();
+    const gain = this.audioCtx!.createGain();
+    osc.type = 'triangle'; osc.frequency.setValueAtTime(freq, time);
+    gain.gain.setValueAtTime(vol, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
+    osc.connect(gain); gain.connect(this.audioCtx!.destination);
+    osc.start(time); osc.stop(time + 0.4);
   }
 
-  private playChord(root: string, quality: string, time: number) {
-    if (!this.audioCtx) return;
-
+  private playChord(root: string, quality: string, time: number, vol = 0.5, duration = 1.0) {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const rootIndex = notes.indexOf(root.toUpperCase().replace('S', '#'));
-    if (rootIndex === -1) return;
-
-    // Middle register for chords (Octave 4)
-    const baseMidi = 48 + rootIndex;
-
-    // Define intervals based on quality
-    let intervals = [0, 4, 7]; // Major default
+    const idx = notes.indexOf(root.toUpperCase().replace('S', '#'));
+    if (idx === -1) return;
+    const baseMidi = 48 + idx;
+    let intervals = [0, 4, 7];
     if (quality === 'minor' || quality === 'm' || quality === 'm7') intervals = [0, 3, 7];
     if (quality === '7') intervals = [0, 4, 7, 10];
     if (quality === 'maj7') intervals = [0, 4, 7, 11];
-    if (quality === 'dim') intervals = [0, 3, 6];
-    if (quality === 'power') intervals = [0, 7, 12]; // Root, 5th, Octave (Heavy)
+    if (quality === 'power') intervals = [0, 7, 12];
 
     intervals.forEach(interval => {
       const osc = this.audioCtx!.createOscillator();
       const gain = this.audioCtx!.createGain();
-      // For power chords, we want a richer wave (sawtooth) to crunch up
       const isPower = quality === 'power';
-      const freq = 440 * Math.pow(2, (baseMidi + interval - 69) / 12);
-
-      osc.type = isPower ? 'sawtooth' : 'sine'; 
-      osc.frequency.setValueAtTime(freq, time);
-
+      osc.type = isPower ? 'sawtooth' : 'sine';
+      osc.frequency.setValueAtTime(440 * Math.pow(2, (baseMidi + interval - 69) / 12), time);
       gain.gain.setValueAtTime(0, time);
-      gain.gain.linearRampToValueAtTime(isPower ? 0.1 : 0.05, time + 0.05); // Harder attack for power chords
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 1.0); 
-
-      // If power chord, maybe route through distortion? 
-      // For now, raw sawtooth will sound buzzy but heavy.
-      // Let's route it through a lowpass to tame the buzz.
+      gain.gain.linearRampToValueAtTime(isPower ? vol * 0.2 : vol * 0.1, time + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
       if (isPower) {
-        const dist = this.audioCtx!.createWaveShaper();
-        dist.curve = this.makeDistortionCurve(50); // Rhythm crunch
-        dist.oversample = '4x';
-
-        const filter = this.audioCtx!.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.value = 2500; // Cabinet sim-ish
-
-        osc.connect(dist);
-        dist.connect(filter);
-        filter.connect(gain);
+        const dist = this.audioCtx!.createWaveShaper(); dist.curve = this.makeDistortionCurve(50);
+        const filter = this.audioCtx!.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 2500;
+        osc.connect(dist); dist.connect(filter); filter.connect(gain);
       } else {
         osc.connect(gain);
       }
-      
       gain.connect(this.audioCtx!.destination);
-
-      osc.start(time);
-      osc.stop(time + 1.0);
+      osc.start(time); osc.stop(time + duration);
     });
+  }
+
+  public async playNoodle() {
+    this.initAudio();
+    if (this.audioCtx?.state === 'suspended') await this.audioCtx.resume();
+    if (!this.track?.noodleSample || !this.audioCtx) return;
+    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const targetKeyIdx = notes.indexOf(this.targetKey.toUpperCase().replace('S', '#'));
+    const baseMidi = 48 + (targetKeyIdx === -1 ? 9 : targetKeyIdx); 
+    const secondsPerBeat = 60.0 / this.tempo;
+    const now = this.audioCtx.currentTime;
+    let acc = 0;
+    this.track.noodleSample.forEach((item, index) => {
+      const durSec = item.duration * secondsPerBeat;
+      if (item.note !== null) {
+        const jitter = index === 0 ? 0 : (Math.random() * 0.03 - 0.015);
+        this.playGuitarNote(baseMidi + item.note, now + acc + jitter, durSec * 0.95, item.velocity || 0.8, item.articulation, item.bendAmount);
+      }
+      acc += durSec;
+    });
+  }
+
+  private generateStringBuffer(frequency: number, duration: number): AudioBuffer {
+    const sampleRate = this.audioCtx!.sampleRate;
+    const N = Math.round(sampleRate / frequency);
+    const buffer = this.audioCtx!.createBuffer(1, sampleRate * duration, sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
+    const decay = this.audioPreset === 'clean' ? 0.998 : 0.995;
+    for (let i = N; i < data.length; i++) {
+      data[i] = 0.5 * (data[i - N] + (i - N - 1 >= 0 ? data[i - N - 1] : 0)) * decay;
+    }
+    return buffer;
+  }
+
+  private playGuitarNote(midi: number, time: number, duration: number, velocity: number, articulation?: any, bendAmount = 0) {
+    const freq = 440 * Math.pow(2, (midi - 69) / 12);
+    const cacheKey = Math.round(freq * 100);
+    let buf = this.bufferCache.get(cacheKey);
+    if (!buf) { buf = this.generateStringBuffer(freq, 3.0); this.bufferCache.set(cacheKey, buf); }
+    const source = this.audioCtx!.createBufferSource(); source.buffer = buf;
+    if (articulation === 'bend' && bendAmount !== 0) {
+      source.playbackRate.setValueAtTime(1.0, time);
+      source.playbackRate.exponentialRampToValueAtTime(Math.pow(2, bendAmount / 12), time + 0.3);
+    } else if (articulation === 'slide') {
+      source.playbackRate.setValueAtTime(Math.pow(2, -2 / 12), time);
+      source.playbackRate.linearRampToValueAtTime(1.0, time + 0.15);
+    }
+    const gain = this.audioCtx!.createGain();
+    const isLegato = articulation === 'hammer' || articulation === 'pull';
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(isLegato ? velocity * 0.7 : velocity, time + (isLegato ? 0.05 : 0.01 / velocity));
+    gain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5);
+    const dist = this.audioCtx!.createWaveShaper(); dist.curve = this.makeDistortionCurve(this.audioPreset === 'clean' ? 5 : 200);
+    const filter = this.audioCtx!.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 3500;
+    source.connect(gain); gain.connect(dist); dist.connect(filter); filter.connect(this.audioCtx!.destination);
+    source.start(time); source.stop(time + duration + 2.0);
+  }
+
+  private makeDistortionCurve(amount: number) {
+    const curve = new Float32Array(44100);
+    for (let i = 0; i < 44100; i++) {
+      const x = (i * 2) / 44100 - 1 + 0.05;
+      if (x > 0) curve[i] = (2 / Math.PI) * Math.atan(x * amount);
+      else curve[i] = (x * 1.5) / (1 + Math.abs(x) * (amount / 2));
+    }
+    return curve;
   }
 }
