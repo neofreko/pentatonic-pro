@@ -196,7 +196,7 @@ const App: React.FC = () => {
     const target = currentChapter.challenge.targetInterval;
 
     // Find candidates that are currently within the visible fretboard
-    const candidates = Array.from(currentPositionNoteIds).filter(id => {
+    const candidates = Array.from(currentPositionNoteIds).filter((id: string) => {
       if (successNoteIds.includes(id)) return false; // Already found
       const [s, f] = id.split('-').map(Number);
       if (f > FRET_COUNT) return false; // Extra safety check
