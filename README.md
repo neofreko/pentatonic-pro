@@ -13,10 +13,26 @@ Pentatonic Pro is a specialized guitar pedagogy application designed to bridge t
 - **Positioning**: Fretboard positions are calculated as `(OpenStringNote + Fret) % 12`.
 
 ### Audio Service & Sequencer (`services/backingTrackService.ts`)
-- **Web Audio API**: Uses high-precision scheduling (Look-ahead pattern) to ensure rock-solid timing.
-- **Amp Simulation**: Implements a sophisticated guitar signal chain including dual oscillators, asymmetric tube-style clipping, and a 4th-order cabinet simulation (based on JCM 800 models).
-- **Backing Tracks**: Features a polyphonic sequencer for drums (Kick, Snare, Hi-hat), Bass, and Harmony (Triads/7th Chords).
-- **Real-time Transposition**: Automatically transposes backing track progressions to match the user's selected `rootNote`.
+The audio engine is the heart of the "Jam Mode" and backing track features. It bypasses pre-recorded audio files in favor of real-time synthesis, offering unlimited flexibility and extremely low bandwidth usage.
+
+#### 1. High-Precision Scheduler
+- **Look-ahead Pattern**: Uses the standard Web Audio scheduling technique. A `setTimeout` loop runs every 25ms to look 100ms into the future.
+- **AudioContext Time**: Events are scheduled using `audioCtx.currentTime`, ensuring sample-accurate timing even if the main JS thread lags.
+- **Polyphonic Sequencing**: Capable of scheduling multiple independent instrument lines (Drums, Bass, Harmony) simultaneously.
+
+#### 2. Karplus-Strong Physical Modeling
+To simulate realistic guitar tones, we replaced standard oscillators with the **Karplus-Strong algorithm**:
+- **Excitation**: A burst of white noise is generated (simulating a pick striking a string).
+- **Resonator**: This noise is fed into a feedback loop with a delay line equal to the pitch period.
+- **Damping**: A Low-Pass filter in the loop simulates the string's natural high-frequency energy loss.
+- **Result**: A mathematically generated sound that physically behaves like a plucked string, with dynamic decay and harmonic complexity.
+
+#### 3. Amp & Cabinet Simulation
+The raw string signal is processed through a chain modeled after a **Marshall JCM 800**:
+- **Pre-Amp**: Multi-stage gain with envelope shaping. The signal is boosted *before* distortion, allowing for dynamic "clean up" based on input velocity.
+- **Asymmetric Distortion**: Uses a custom WaveShaper curve that clips positive and negative cycles differently, mimicking the non-linear response of vacuum tubes.
+- **Tonestack**: A 3-band EQ with a fixed mid-hump (~800Hz) characteristic of British amplifiers.
+- **Cabinet Simulation**: A 4th-order filter chain (High Pass -> Notch -> Low Pass -> Low Pass) that emulates the frequency response of a 12-inch Celestion speaker, rolling off harsh digital fizz above 4kHz.
 
 ### AI Integration (`services/aiService.ts`)
 - **Primary Engine**: **OpenRouter** (supports Gemini 2.0 Flash, Claude 3, Llama 3.1, etc.).

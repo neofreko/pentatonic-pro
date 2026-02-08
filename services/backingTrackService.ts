@@ -1,471 +1,741 @@
 
 import { BackingTrack, SequencerState } from '../types';
 
+/**
+
+ * Service class responsible for scheduling and synthesizing backing tracks.
+
+ * 
+
+ * Features:
+
+ * - Precision scheduling using the "Look-ahead" pattern (Web Audio API).
+
+ * - Polyphonic sequencing for Drums, Bass, and Harmony.
+
+ * - Karplus-Strong physical modeling for realistic guitar string synthesis.
+
+ * - JCM 800-inspired Amplifier and Cabinet simulation.
+
+ * - Real-time transposition and tempo adjustment.
+
+ */
+
 export class BackingTrackService {
+
   private audioCtx: AudioContext | null = null;
+
   private track: BackingTrack | null = null;
+
   private targetKey: string = 'A';
+
   private isPlaying: boolean = false;
+
+  
+
+  // Scheduling state
+
   private currentBeat: number = 0;
+
   private tempo: number = 120;
+
   private nextNoteTime: number = 0;
+
   private timerID: number | null = null;
-  private lookAhead: number = 25.0; // ms
-  private scheduleAheadTime: number = 0.1; // seconds
+
+  
+
+  // Scheduler tuning
+
+  private lookAhead: number = 25.0; // ms to sleep between scheduling checks
+
+  private scheduleAheadTime: number = 0.1; // seconds to schedule into the future
+
+  
+
   private audioPreset: 'clean' | 'crunch' | 'dreamy' = 'clean';
+
+
 
   constructor() {}
 
+
+
+  /**
+
+   * Initializes the AudioContext if it doesn't exist.
+
+   * Must be called after a user interaction to unlock audio in browsers.
+
+   */
+
   private initAudio() {
+
     if (!this.audioCtx) {
+
       this.audioCtx = new AudioContext();
+
     }
+
   }
+
+
+
+  /**
+
+   * Sets the global audio preset affecting the guitar tone.
+
+   * @param preset - 'clean' (Sparkly), 'crunch' (JCM800), or 'dreamy' (Ambient Delay)
+
+   */
 
   public setAudioPreset(preset: 'clean' | 'crunch' | 'dreamy') {
+
     this.audioPreset = preset;
+
     console.log(`[BackingTrackService] Audio preset set to ${preset}`);
+
   }
+
+
+
+  /**
+
+   * Sets the target key for transposition. All chords and melodies will be
+
+   * shifted relative to the track's original key.
+
+   * @param key - The new root note (e.g., 'G', 'F#')
+
+   */
 
   public setTargetKey(key: string) {
+
     this.targetKey = key;
+
     console.log(`[BackingTrackService] Target key set to ${key}`);
+
   }
+
+
+
+  /**
+
+   * Returns the current state of the sequencer for UI updates.
+
+   */
 
   public getState(): SequencerState {
+
     return {
+
       isPlaying: this.isPlaying,
+
       currentBeat: this.currentBeat,
+
       currentBar: Math.floor(this.currentBeat / (this.track?.timeSignature[0] || 4)) + 1,
+
       totalBeats: this.calculateTotalBeats(),
+
       tempo: this.tempo
+
     };
+
   }
+
+
 
   private calculateTotalBeats(): number {
+
     if (!this.track) return 0;
+
     return this.track.progression.reduce((acc, chord) => acc + chord.duration, 0);
+
   }
+
+
 
   public setTempo(bpm: number) {
+
     if (bpm < 40 || bpm > 240) {
+
       console.error(`[BackingTrackService] Invalid tempo: ${bpm}. Must be 40-240.`);
+
       throw new Error('Tempo must be between 40 and 240 BPM');
+
     }
+
     this.tempo = bpm;
+
     console.log(`[BackingTrackService] Tempo set to ${bpm} BPM`);
+
   }
+
+
+
+  /**
+
+   * Loads a backing track and resets the sequencer.
+
+   * @param track - The BackingTrack object containing progression and metadata.
+
+   */
 
   public loadTrack(track: BackingTrack) {
+
     if (!track.progression || track.progression.length === 0) {
+
       console.error('[BackingTrackService] Load failed: Empty progression.');
+
       throw new Error('Progression must contain at least one chord');
+
     }
+
     this.track = track;
+
     this.tempo = track.tempo;
+
     this.currentBeat = 0;
+
     console.log(`[BackingTrackService] Loaded track: ${track.name}`);
+
   }
 
+
+
+  /**
+
+   * Starts the sequencer. Resumes AudioContext if suspended.
+
+   */
+
   public async start() {
+
     this.initAudio();
+
     if (this.audioCtx?.state === 'suspended') {
+
       await this.audioCtx.resume();
+
     }
+
+
 
     if (this.isPlaying) return;
 
+
+
     this.isPlaying = true;
+
     this.nextNoteTime = this.audioCtx!.currentTime;
+
     this.scheduler();
+
     console.log('[BackingTrackService] Playback started');
+
   }
+
+
+
+  /**
+
+   * Plays the "Noodle Sample" melody using the Karplus-Strong guitar synth.
+
+   * Adapts to the current key and audio preset.
+
+   */
 
   public async playNoodle() {
+
     this.initAudio();
+
     if (this.audioCtx?.state === 'suspended') {
+
       await this.audioCtx.resume();
+
     }
+
     
+
     if (!this.track?.noodleSample || !this.audioCtx) return;
 
+
+
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
     const targetKeyIndex = notes.indexOf(this.targetKey.toUpperCase().replace('S', '#'));
+
     
+
     // Base MIDI for guitar range (Octave 4)
+
     const baseMidi = 48 + (targetKeyIndex === -1 ? 9 : targetKeyIndex); 
+
     const secondsPerBeat = 60.0 / this.tempo;
+
     
+
     const now = this.audioCtx.currentTime;
+
     let accumulatedTime = 0;
 
+
+
     this.track.noodleSample.forEach((item) => {
+
       if (item.note !== null) {
+
         // Duration in seconds (slightly shortened for articulation)
+
         const durationSec = item.duration * secondsPerBeat; 
+
         const playDuration = durationSec * 0.95; 
 
+
+
         this.playGuitarNote(baseMidi + item.note, now + accumulatedTime, playDuration);
+
       }
+
       accumulatedTime += item.duration * secondsPerBeat;
+
     });
+
   }
 
-        // KARPLUS-STRONG ALGORITHM
 
-        // Physically models a plucked string by filtering a noise burst through a delay loop
 
-        private generateStringBuffer(frequency: number, duration: number): AudioBuffer {
+  /**
 
-          if (!this.audioCtx) throw new Error('No Audio Context');
+   * Generates a Karplus-Strong string buffer.
 
-      
+   * This physically models a plucked string by looping noise through a low-pass delay line.
 
-          const sampleRate = this.audioCtx.sampleRate;
+   * 
 
-          // Calculate period (length of the string in samples)
+   * @param frequency - The fundamental frequency of the note.
 
-          const N = Math.round(sampleRate / frequency);
+   * @param duration - Length of the buffer in seconds.
 
-          
+   * @returns An AudioBuffer containing the generated string sound.
 
-          // Total duration samples
+   */
 
-          const length = sampleRate * duration;
+  private generateStringBuffer(frequency: number, duration: number): AudioBuffer {
 
-          const buffer = this.audioCtx.createBuffer(1, length, sampleRate);
+    if (!this.audioCtx) throw new Error('No Audio Context');
 
-          const data = buffer.getChannelData(0);
 
-      
 
-          // 1. "Excite" the string (The Pick)
+    const sampleRate = this.audioCtx.sampleRate;
 
-          // Fill the first period (N samples) with white noise
+    // Calculate period (length of the string in samples)
 
-          for (let i = 0; i < N; i++) {
-
-            data[i] = Math.random() * 2 - 1;
-
-          }
-
-      
-
-              // 2. String Decay (The Vibration)
-
-      
-
-              // Loop through the rest of the buffer, averaging previous samples (Low Pass Filter)
-
-      
-
-              let prevVal = 0;
-
-      
-
-              for (let i = N; i < length; i++) {
-
-      
-
-                // Safe access to previous sample
-
-      
-
-                const prevSample1 = data[i - N];
-
-      
-
-                const prevSample2 = i - N - 1 >= 0 ? data[i - N - 1] : 0;
-
-      
-
-                
-
-      
-
-                const val = 0.5 * (prevSample1 + prevSample2);
-
-      
-
-                
-
-      
-
-                // Character variation: 'Clean' strings decay slower, 'Crunch' strings are brighter
-
-      
-
-                const decay = this.audioPreset === 'clean' ? 0.996 : 0.992;
-
-      
-
-                data[i] = val * decay;
-
-      
-
-              }
-
-      
-
-          
-
-      
-
-              return buffer;
-
-      
-
-            }
-
-      
-
-          
-
-      
-
-          private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
-
-      
-
-            if (!this.audioCtx) return;
-
-      
-
-        
-
-      
-
-            // Calculate frequency
-
-      
-
-            const freq = 440 * Math.pow(2, (midi - 69) / 12);
-
-      
-
-            
-
-      
-
-            // --- 1. THE STRING (Physical Source) ---
-
-      
-
-            // Generate the raw string vibration
-
-      
-
-            const stringBuffer = this.generateStringBuffer(freq, 2.0); 
-
-      
-
-            
-
-      
-
-            const source = this.audioCtx.createBufferSource();
-
-      
-
-            source.buffer = stringBuffer;
-
-      
-
-        
-
-      
-
-            // --- 2. PRE-AMP (Gain Stage) ---
-
-      
-
-        
-
-          const preAmpGain = this.audioCtx.createGain();
-
-          preAmpGain.gain.setValueAtTime(0, time);
-
-          // Karplus-Strong is naturally dynamic, so we just shape the volume slightly
-
-          preAmpGain.gain.setValueAtTime(1.0, time); 
-
-          preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 0.5); // Fade out
-
-      
-
-          source.connect(preAmpGain);
-
-      
-
-          // --- 3. DISTORTION STAGE ---
-
-          const distGain = this.audioCtx.createGain();
-
-          // Drive the distortion harder for crunch/dreamy
-
-          distGain.gain.value = this.audioPreset === 'clean' ? 1.5 : 50; 
-
-      
-
-          const distortion = this.audioCtx.createWaveShaper();
-
-          distortion.curve = this.makeDistortionCurve(this.audioPreset === 'clean' ? 5 : 200);
-
-          distortion.oversample = '4x';
-
-      
-
-          preAmpGain.connect(distGain);
-
-          distGain.connect(distortion);
-
-      
-
-          // --- 4. TONESTACK & CABINET ---
-
-          // Marshall-style EQ
-
-          const midBoost = this.audioCtx.createBiquadFilter();
-
-          midBoost.type = 'peaking';
-
-          midBoost.frequency.setValueAtTime(800, time);
-
-          midBoost.Q.value = 1.0;
-
-          midBoost.gain.value = 6;
-
-      
-
-          const cabLP = this.audioCtx.createBiquadFilter();
-
-          cabLP.type = 'lowpass';
-
-          cabLP.frequency.setValueAtTime(3500, time); // Speaker rolloff
-
-      
-
-          const cabHP = this.audioCtx.createBiquadFilter();
-
-          cabHP.type = 'highpass';
-
-          cabHP.frequency.setValueAtTime(100, time); // Remove sub-rumble
-
-      
-
-          distortion.connect(midBoost);
-
-          midBoost.connect(cabHP);
-
-          cabHP.connect(cabLP);
-
-      
-
-          // --- 5. MASTER & EFFECTS ---
-
-          const masterGain = this.audioCtx.createGain();
-
-          // Compensate for the massive gain in distortion stage
-
-          masterGain.gain.value = this.audioPreset === 'clean' ? 0.4 : 0.05;
-
-      
-
-          // Basic Delay for 'Dreamy'
-
-          if (this.audioPreset === 'dreamy') {
-
-            const delay = this.audioCtx.createDelay();
-
-            delay.delayTime.value = 0.35;
-
-            const delayFeedback = this.audioCtx.createGain();
-
-            delayFeedback.gain.value = 0.4;
-
-            
-
-            cabLP.connect(delay);
-
-            delay.connect(delayFeedback);
-
-            delayFeedback.connect(delay);
-
-            delay.connect(masterGain);
-
-            cabLP.connect(masterGain);
-
-          } else {
-
-            cabLP.connect(masterGain);
-
-          }
-
-      
-
-          masterGain.connect(this.audioCtx.destination);
-
-      
-
-          source.start(time);
-
-          source.stop(time + duration + 1.0);
-
-        }
-
-      
+    const N = Math.round(sampleRate / frequency);
 
     
-    public stop() {
-    this.isPlaying = false;
-    if (this.timerID) {
-      clearTimeout(this.timerID as any);
-      this.timerID = null;
+
+    // Total duration samples
+
+    const length = sampleRate * duration;
+
+    const buffer = this.audioCtx.createBuffer(1, length, sampleRate);
+
+    const data = buffer.getChannelData(0);
+
+
+
+    // 1. "Excite" the string (The Pick)
+
+    // Fill the first period (N samples) with white noise
+
+    for (let i = 0; i < N; i++) {
+
+      data[i] = Math.random() * 2 - 1;
+
     }
-    this.currentBeat = 0;
-    console.log('[BackingTrackService] Playback stopped');
+
+
+
+            // 2. String Decay (The Vibration)
+
+
+
+            // Loop through the rest of the buffer, averaging previous samples (Low Pass Filter)
+
+
+
+            // y[n] = 0.99 * 0.5 * (y[n-N] + y[n-N-1])
+
+
+
+            let prevVal = 0;
+
+
+
+            // Character variation: 'Clean' strings decay slower, 'Crunch' strings are brighter
+
+
+
+            const decay = this.audioPreset === 'clean' ? 0.996 : 0.992;
+
+
+
+            
+
+
+
+            for (let i = N; i < length; i++) {
+
+
+
+        
+
+
+
+          // Safe access to previous sample
+
+
+
+    
+
+      const prevSample1 = data[i - N];
+
+      const prevSample2 = i - N - 1 >= 0 ? data[i - N - 1] : 0;
+
+      
+
+            
+
+      
+
+            const val = 0.5 * (prevSample1 + prevSample2);
+
+      
+
+            
+
+      
+
+            // Character variation: 'Clean' strings decay slower, 'Crunch' strings are brighter
+
+      
+
+            data[i] = val * decay;
+
+      
+
+          }
+
+      
+
+      
+
+
+
+    return buffer;
+
   }
+
+
+
+  /**
+
+   * Synthesizes a guitar note using physical modeling (Karplus-Strong) fed into
+
+   * a simulated amplifier chain (Pre-Amp -> Distortion -> Cabinet -> Effects).
+
+   * 
+
+   * @param midi - The MIDI note number.
+
+   * @param time - The AudioContext time to start playback.
+
+   * @param duration - Duration of the note in seconds.
+
+   */
+
+  private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
+
+    if (!this.audioCtx) return;
+
+
+
+    // Calculate frequency
+
+    const freq = 440 * Math.pow(2, (midi - 69) / 12);
+
+    
+
+    // --- 1. THE STRING (Physical Source) ---
+
+    // Generate the raw string vibration
+
+    const stringBuffer = this.generateStringBuffer(freq, 2.0); 
+
+    
+
+    const source = this.audioCtx.createBufferSource();
+
+    source.buffer = stringBuffer;
+
+
+
+    // --- 2. PRE-AMP (Gain Stage) ---
+
+    const preAmpGain = this.audioCtx.createGain();
+
+    preAmpGain.gain.setValueAtTime(0, time);
+
+    // Karplus-Strong is naturally dynamic, so we just shape the volume slightly
+
+    preAmpGain.gain.setValueAtTime(1.0, time); 
+
+    preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 0.5); // Fade out
+
+
+
+    source.connect(preAmpGain);
+
+
+
+    // --- 3. DISTORTION STAGE ---
+
+    const distGain = this.audioCtx.createGain();
+
+    // Drive the distortion harder for crunch/dreamy
+
+    distGain.gain.value = this.audioPreset === 'clean' ? 1.5 : 50; 
+
+
+
+    const distortion = this.audioCtx.createWaveShaper();
+
+    distortion.curve = this.makeDistortionCurve(this.audioPreset === 'clean' ? 5 : 200);
+
+    distortion.oversample = '4x';
+
+
+
+    preAmpGain.connect(distGain);
+
+    distGain.connect(distortion);
+
+
+
+    // --- 4. TONESTACK & CABINET ---
+
+    // Marshall-style EQ to shape the distorted signal
+
+    const midBoost = this.audioCtx.createBiquadFilter();
+
+    midBoost.type = 'peaking';
+
+    midBoost.frequency.setValueAtTime(800, time);
+
+    midBoost.Q.value = 1.0;
+
+    midBoost.gain.value = 6;
+
+
+
+    const cabLP = this.audioCtx.createBiquadFilter();
+
+    cabLP.type = 'lowpass';
+
+    cabLP.frequency.setValueAtTime(3500, time); // Speaker rolloff
+
+
+
+    const cabHP = this.audioCtx.createBiquadFilter();
+
+    cabHP.type = 'highpass';
+
+    cabHP.frequency.setValueAtTime(100, time); // Remove sub-rumble
+
+
+
+    distortion.connect(midBoost);
+
+    midBoost.connect(cabHP);
+
+    cabHP.connect(cabLP);
+
+
+
+    // --- 5. MASTER & EFFECTS ---
+
+    const masterGain = this.audioCtx.createGain();
+
+    // Compensate for the massive gain in distortion stage
+
+    masterGain.gain.value = this.audioPreset === 'clean' ? 0.4 : 0.05;
+
+
+
+    // Basic Delay for 'Dreamy'
+
+    if (this.audioPreset === 'dreamy') {
+
+      const delay = this.audioCtx.createDelay();
+
+      delay.delayTime.value = 0.35;
+
+      const delayFeedback = this.audioCtx.createGain();
+
+      delayFeedback.gain.value = 0.4;
+
+      
+
+      cabLP.connect(delay);
+
+      delay.connect(delayFeedback);
+
+      delayFeedback.connect(delay);
+
+      delay.connect(masterGain);
+
+      cabLP.connect(masterGain);
+
+    } else {
+
+      cabLP.connect(masterGain);
+
+    }
+
+
+
+    masterGain.connect(this.audioCtx.destination);
+
+
+
+    source.start(time);
+
+    source.stop(time + duration + 1.0);
+
+  }
+
+
+
+  public stop() {
+
+    this.isPlaying = false;
+
+    if (this.timerID) {
+
+      clearTimeout(this.timerID as any);
+
+      this.timerID = null;
+
+    }
+
+    this.currentBeat = 0;
+
+    console.log('[BackingTrackService] Playback stopped');
+
+  }
+
+
+
+  /**
+
+   * The core scheduling loop.
+
+   * Checks for notes that need to be played in the next `scheduleAheadTime` window.
+
+   */
 
   private scheduler() {
+
     if (!this.isPlaying || !this.audioCtx) return;
 
+
+
     while (this.nextNoteTime < this.audioCtx.currentTime + this.scheduleAheadTime) {
+
       this.scheduleNote(this.currentBeat, this.nextNoteTime);
+
       this.nextBeat();
+
     }
+
     
+
     this.timerID = setTimeout(() => this.scheduler(), this.lookAhead) as any;
+
   }
+
+
 
   private nextBeat() {
+
     const secondsPerBeat = 60.0 / this.tempo;
+
     this.nextNoteTime += secondsPerBeat;
+
     
+
     const totalBeats = this.calculateTotalBeats();
+
     this.currentBeat++;
+
     if (this.currentBeat >= totalBeats) {
+
       this.currentBeat = 0; // Loop
+
     }
+
   }
 
-    private makeDistortionCurve(amount: number) {
-      const n_samples = 44100;
-      const curve = new Float32Array(n_samples);
-      const k = amount;
-      for (let i = 0; i < n_samples; ++i) {
-        const x = (i * 2) / n_samples - 1;
-        // Asymmetric soft clipping: different curve for positive and negative
-        // This mimics how real tube circuits are biased
-        const xBiased = x + 0.05; 
-        if (xBiased > 0) {
-          curve[i] = (2 / Math.PI) * Math.atan(xBiased * k);
-        } else {
-          curve[i] = (xBiased * 1.5) / (1 + Math.abs(xBiased) * (k / 2));
-        }
+
+
+  /**
+
+   * Creates a sigmoid distortion curve for the WaveShaperNode.
+
+   * Can be configured for soft clipping (low amounts) or hard fuzz (high amounts).
+
+   */
+
+  private makeDistortionCurve(amount: number) {
+
+    const n_samples = 44100;
+
+    const curve = new Float32Array(n_samples);
+
+    const k = amount;
+
+    for (let i = 0; i < n_samples; ++i) {
+
+      const x = (i * 2) / n_samples - 1;
+
+      // Asymmetric soft clipping: different curve for positive and negative
+
+      // This mimics how real tube circuits are biased
+
+      const xBiased = x + 0.05; 
+
+      if (xBiased > 0) {
+
+        curve[i] = (2 / Math.PI) * Math.atan(xBiased * k);
+
+      } else {
+
+        curve[i] = (xBiased * 1.5) / (1 + Math.abs(xBiased) * (k / 2));
+
       }
-      return curve;
+
     }
-    private scheduleNote(beatNumber: number, time: number) {
+
+    return curve;
+
+  }
+
+
+
+  private scheduleNote(beatNumber: number, time: number) {
+
+
     if (!this.audioCtx || !this.track) return;
 
     const beatsPerBar = this.track.timeSignature[0] || 4;

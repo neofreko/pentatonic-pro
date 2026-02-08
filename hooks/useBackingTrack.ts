@@ -4,6 +4,16 @@ import { BackingTrackService } from '../services/backingTrackService';
 import { BackingTrack, SequencerState } from '../types';
 import { BACKING_TRACKS } from '../data/backingTracks';
 
+/**
+ * Custom hook to manage the backing track sequencer and synthesis service.
+ * 
+ * Responsibilities:
+ * - Initializes and persists the BackingTrackService instance.
+ * - Bridges the service state (isPlaying, currentBar, etc.) to the React UI.
+ * - Exposes control methods for playback, tempo, and preset management.
+ * 
+ * @returns An object containing the current sequencer state and control functions.
+ */
 export const useBackingTrack = () => {
   const serviceRef = useRef<BackingTrackService | null>(null);
   const [state, setState] = useState<SequencerState>({
@@ -15,6 +25,7 @@ export const useBackingTrack = () => {
   });
   const [currentTrack, setCurrentTrack] = useState<BackingTrack | null>(null);
 
+  // Initialize service once on mount
   useEffect(() => {
     serviceRef.current = new BackingTrackService();
     return () => {
@@ -22,7 +33,7 @@ export const useBackingTrack = () => {
     };
   }, []);
 
-  // Update state periodically when playing
+  // Update state periodically when playing (animation frame loop style)
   useEffect(() => {
     let interval: any;
     if (state.isPlaying) {
@@ -31,7 +42,7 @@ export const useBackingTrack = () => {
           const newState = serviceRef.current.getState();
           setState(newState);
         }
-      }, 50); // 20fps for UI updates
+      }, 50); // 20fps for UI updates is sufficient for visual feedback
     } else {
       if (serviceRef.current) {
         setState(serviceRef.current.getState());
@@ -40,6 +51,10 @@ export const useBackingTrack = () => {
     return () => clearInterval(interval);
   }, [state.isPlaying]);
 
+  /**
+   * Loads a new backing track into the sequencer.
+   * @param track - The selected backing track configuration.
+   */
   const loadTrack = useCallback((track: BackingTrack) => {
     try {
       serviceRef.current?.loadTrack(track);
@@ -50,6 +65,10 @@ export const useBackingTrack = () => {
     }
   }, []);
 
+  /**
+   * Toggles the sequencer playback.
+   * Starts or stops the audio engine.
+   */
   const togglePlay = useCallback(async () => {
     if (!serviceRef.current || !currentTrack) return;
 
