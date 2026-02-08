@@ -12,9 +12,11 @@ Pentatonic Pro is a specialized guitar pedagogy application designed to bridge t
 - **Scale Calculations**: Scales are defined as intervals (e.g., `[0, 3, 5, 7, 10]` for minor pentatonic). The logic checks if a note's distance from the `rootNote` matches one of these intervals.
 - **Positioning**: Fretboard positions are calculated as `(OpenStringNote + Fret) % 12`.
 
-### Audio Service (`utils/audio.ts`)
-- Uses the **Web Audio API**.
-- Implements a basic synthesis engine (Triangle Oscillator with an Exponential Decay Envelope) to simulate a guitar pluck without external assets.
+### Audio Service & Sequencer (`services/backingTrackService.ts`)
+- **Web Audio API**: Uses high-precision scheduling (Look-ahead pattern) to ensure rock-solid timing.
+- **Amp Simulation**: Implements a sophisticated guitar signal chain including dual oscillators, asymmetric tube-style clipping, and a 4th-order cabinet simulation (based on JCM 800 models).
+- **Backing Tracks**: Features a polyphonic sequencer for drums (Kick, Snare, Hi-hat), Bass, and Harmony (Triads/7th Chords).
+- **Real-time Transposition**: Automatically transposes backing track progressions to match the user's selected `rootNote`.
 
 ### AI Integration (`services/aiService.ts`)
 - **Primary Engine**: **OpenRouter** (supports Gemini 2.0 Flash, Claude 3, Llama 3.1, etc.).
@@ -32,8 +34,15 @@ The syllabus is defined in `data/chapters.ts` using the following interface:
 - **Colors**: Slate-950 background for high contrast, Amber-500 for primary actions and Roots, Indigo-500 for challenges.
 - **Fretboard**: 15 frets by default. Includes standard dot inlays at 3, 5, 7, 9, 12.
 
-## 5. Maintenance
-To add a new chapter:
-1. Define the structure in `types.ts`.
-2. Add a new object to the `CHAPTERS` array in `data/chapters.ts`.
-3. The UI will automatically detect the new chapter and update the Syllabus sidebar.
+## 6. Credits & Acknowledgments
+
+Pentatonic Pro incorporates logic and architectural patterns inspired by several open-source projects:
+
+- **[Backing Tracks](https://github.com/ako/backing-tracks)**: The data-driven approach to backing tracks and the conceptual model for "Jam Mode" was inspired by this repository's BTML (Backing Track Markup Language).
+- **[WebAudio Guitar Amplifier Simulator](https://github.com/micbuffa/WebAudio-Guitar-Amplifier-Simulator-3)**: The high-gain synthesis engine, asymmetric distortion models, and 4th-order cabinet filtering were adapted from the sophisticated amp simulations developed by micbuffa.
+
+## 7. Development
+To run the project locally:
+1. `bun install`
+2. `bun run dev`
+3. `bun test` to run the test suite.
