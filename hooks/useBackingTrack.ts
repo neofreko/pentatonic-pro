@@ -74,6 +74,10 @@ export const useBackingTrack = () => {
     serviceRef.current?.setTargetKey(key);
   }, []);
 
+  const setAudioPreset = useCallback((preset: 'clean' | 'crunch' | 'dreamy') => {
+    serviceRef.current?.setAudioPreset(preset);
+  }, []);
+
   const playNoodle = useCallback(() => {
     serviceRef.current?.playNoodle();
   }, []);
@@ -85,6 +89,7 @@ export const useBackingTrack = () => {
     togglePlay,
     setTempo,
     setTargetKey,
+    setAudioPreset,
     playNoodle,
     availableTracks: BACKING_TRACKS
   };

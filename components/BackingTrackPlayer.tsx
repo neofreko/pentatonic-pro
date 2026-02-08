@@ -6,9 +6,10 @@ import { ScaleType } from '../types';
 interface BackingTrackPlayerProps {
   rootNote: string;
   scaleType: ScaleType;
+  audioPreset: 'clean' | 'crunch' | 'dreamy';
 }
 
-export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote, scaleType }) => {
+export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote, scaleType, audioPreset }) => {
   const { 
     isPlaying, 
     currentBeat, 
@@ -19,6 +20,7 @@ export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote
     togglePlay, 
     setTempo, 
     setTargetKey,
+    setAudioPreset,
     playNoodle,
     availableTracks 
   } = useBackingTrack();
@@ -27,6 +29,11 @@ export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote
   useEffect(() => {
     setTargetKey(rootNote);
   }, [rootNote, setTargetKey]);
+
+  // Sync audio preset
+  useEffect(() => {
+    setAudioPreset(audioPreset);
+  }, [audioPreset, setAudioPreset]);
 
   // Filter tracks by mode
   const filteredTracks = useMemo(() => {

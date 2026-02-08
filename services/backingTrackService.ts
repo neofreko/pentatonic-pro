@@ -12,6 +12,7 @@ export class BackingTrackService {
   private timerID: number | null = null;
   private lookAhead: number = 25.0; // ms
   private scheduleAheadTime: number = 0.1; // seconds
+  private audioPreset: 'clean' | 'crunch' | 'dreamy' = 'clean';
 
   constructor() {}
 
@@ -19,6 +20,11 @@ export class BackingTrackService {
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext();
     }
+  }
+
+  public setAudioPreset(preset: 'clean' | 'crunch' | 'dreamy') {
+    this.audioPreset = preset;
+    console.log(`[BackingTrackService] Audio preset set to ${preset}`);
   }
 
   public setTargetKey(key: string) {
@@ -105,94 +111,243 @@ export class BackingTrackService {
     });
   }
 
-    private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
-      if (!this.audioCtx) return;
-  
-      // --- 1. THE STRING (Source) ---
-      const osc1 = this.audioCtx.createOscillator();
-      const osc2 = this.audioCtx.createOscillator();
-      osc1.type = 'sawtooth';
-      osc2.type = 'square'; 
-  
-      const freq = 440 * Math.pow(2, (midi - 69) / 12);
-      osc1.frequency.setValueAtTime(freq, time);
-      osc2.frequency.setValueAtTime(freq, time);
-      osc2.detune.setValueAtTime(7, time); 
-  
-      const stringMix = this.audioCtx.createGain();
-      stringMix.gain.value = 0.4;
-      osc1.connect(stringMix);
-      osc2.connect(stringMix);
-  
-      const stringHP = this.audioCtx.createBiquadFilter();
-      stringHP.type = 'highpass';
-      stringHP.frequency.setValueAtTime(350, time);
-      stringMix.connect(stringHP);
-  
-      // --- 2. PRE-AMP (Gain Stage) ---
-      const preAmpGain = this.audioCtx.createGain();
-      preAmpGain.gain.setValueAtTime(0, time);
-      preAmpGain.gain.linearRampToValueAtTime(1.8, time + 0.005);
-      preAmpGain.gain.exponentialRampToValueAtTime(1.0, time + 0.1); 
-      preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration);
-  
-      const preAmpDist = this.audioCtx.createWaveShaper();
-      preAmpDist.curve = this.makeDistortionCurve(60); 
-      preAmpDist.oversample = '4x';
-  
-      stringHP.connect(preAmpGain);
-      preAmpGain.connect(preAmpDist);
-  
-      // --- 3. TONESTACK (EQ) ---
-      const midBoost = this.audioCtx.createBiquadFilter();
-      midBoost.type = 'peaking';
-      midBoost.frequency.setValueAtTime(800, time);
-      midBoost.Q.value = 1.0;
-      midBoost.gain.value = 9; 
-  
-      const trebleShelf = this.audioCtx.createBiquadFilter();
-      trebleShelf.type = 'highshelf';
-      trebleShelf.frequency.setValueAtTime(2500, time);
-      trebleShelf.gain.value = 5;
-  
-      preAmpDist.connect(midBoost);
-      midBoost.connect(trebleShelf);
-  
-      // --- 4. CABINET SIMULATION ---
-      const cabLP1 = this.audioCtx.createBiquadFilter();
-      cabLP1.type = 'lowpass';
-      cabLP1.frequency.setValueAtTime(4000, time);
+        // KARPLUS-STRONG ALGORITHM
+
+        // Physically models a plucked string by filtering a noise burst through a delay loop
+
+        private generateStringBuffer(frequency: number, duration: number): AudioBuffer {
+
+          if (!this.audioCtx) throw new Error('No Audio Context');
+
       
-      const cabLP2 = this.audioCtx.createBiquadFilter();
-      cabLP2.type = 'lowpass';
-      cabLP2.frequency.setValueAtTime(4000, time);
-  
-      const cabNotch = this.audioCtx.createBiquadFilter();
-      cabNotch.type = 'notch';
-      cabNotch.frequency.setValueAtTime(400, time);
-      cabNotch.Q.value = 0.4;
-  
-      const cabHP = this.audioCtx.createBiquadFilter();
-      cabHP.type = 'highpass';
-      cabHP.frequency.setValueAtTime(100, time);
-  
-      trebleShelf.connect(cabHP);
-      cabHP.connect(cabNotch);
-      cabNotch.connect(cabLP1);
-      cabLP1.connect(cabLP2);
-  
-      // --- 5. MASTER ---
-      const masterGain = this.audioCtx.createGain();
-      masterGain.gain.value = 0.3;
-  
-      cabLP2.connect(masterGain);
-      masterGain.connect(this.audioCtx.destination);
-  
-      osc1.start(time);
-      osc2.start(time);
-      osc1.stop(time + duration + 0.1);
-      osc2.stop(time + duration + 0.1);
-    }
+
+          const sampleRate = this.audioCtx.sampleRate;
+
+          // Calculate period (length of the string in samples)
+
+          const N = Math.round(sampleRate / frequency);
+
+          
+
+          // Total duration samples
+
+          const length = sampleRate * duration;
+
+          const buffer = this.audioCtx.createBuffer(1, length, sampleRate);
+
+          const data = buffer.getChannelData(0);
+
+      
+
+          // 1. "Excite" the string (The Pick)
+
+          // Fill the first period (N samples) with white noise
+
+          for (let i = 0; i < N; i++) {
+
+            data[i] = Math.random() * 2 - 1;
+
+          }
+
+      
+
+          // 2. String Decay (The Vibration)
+
+          // Loop through the rest of the buffer, averaging previous samples (Low Pass Filter)
+
+          // y[n] = 0.99 * 0.5 * (y[n-N] + y[n-N-1])
+
+          // The 0.99 is the decay factor (energy loss)
+
+          let prevVal = 0;
+
+          for (let i = N; i < length; i++) {
+
+            const val = 0.5 * (data[i - N] + data[i - N - 1]);
+
+            // Character variation: 'Clean' strings decay slower, 'Crunch' strings are brighter
+
+            const decay = this.audioPreset === 'clean' ? 0.996 : 0.992;
+
+            data[i] = val * decay;
+
+            prevVal = val;
+
+          }
+
+      
+
+          return buffer;
+
+        }
+
+      
+
+        private playGuitarNote(midi: number, time: number, duration: number = 0.8) {
+
+          if (!this.audioCtx) return;
+
+      
+
+          // Calculate frequency
+
+          const freq = 440 * Math.pow(2, (midi - 69) / 12);
+
+          
+
+          // --- 1. THE STRING (Physical Source) ---
+
+          // Generate the raw string vibration
+
+          // We generate a slightly longer buffer to allow for natural decay tail
+
+          const stringBuffer = this.generateStringBuffer(freq, 2.0); 
+
+          
+
+          const source = this.audioCtx.createBufferSource();
+
+          source.buffer = stringBuffer;
+
+      
+
+          // --- 2. PRE-AMP (Gain Stage) ---
+
+          const preAmpGain = this.audioCtx.createGain();
+
+          preAmpGain.gain.setValueAtTime(0, time);
+
+          // Karplus-Strong is naturally dynamic, so we just shape the volume slightly
+
+          preAmpGain.gain.setValueAtTime(1.0, time); 
+
+          preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 0.5); // Fade out
+
+      
+
+          source.connect(preAmpGain);
+
+      
+
+          // --- 3. DISTORTION STAGE ---
+
+          const distGain = this.audioCtx.createGain();
+
+          // Drive the distortion harder for crunch/dreamy
+
+          distGain.gain.value = this.audioPreset === 'clean' ? 1.5 : 50; 
+
+      
+
+          const distortion = this.audioCtx.createWaveShaper();
+
+          distortion.curve = this.makeDistortionCurve(this.audioPreset === 'clean' ? 5 : 200);
+
+          distortion.oversample = '4x';
+
+      
+
+          preAmpGain.connect(distGain);
+
+          distGain.connect(distortion);
+
+      
+
+          // --- 4. TONESTACK & CABINET ---
+
+          // Marshall-style EQ
+
+          const midBoost = this.audioCtx.createBiquadFilter();
+
+          midBoost.type = 'peaking';
+
+          midBoost.frequency.setValueAtTime(800, time);
+
+          midBoost.Q.value = 1.0;
+
+          midBoost.gain.value = 6;
+
+      
+
+          const cabLP = this.audioCtx.createBiquadFilter();
+
+          cabLP.type = 'lowpass';
+
+          cabLP.frequency.setValueAtTime(3500, time); // Speaker rolloff
+
+      
+
+          const cabHP = this.audioCtx.createBiquadFilter();
+
+          cabHP.type = 'highpass';
+
+          cabHP.frequency.setValueAtTime(100, time); // Remove sub-rumble
+
+      
+
+          distortion.connect(midBoost);
+
+          midBoost.connect(cabHP);
+
+          cabHP.connect(cabLP);
+
+      
+
+          // --- 5. MASTER & EFFECTS ---
+
+          const masterGain = this.audioCtx.createGain();
+
+          // Compensate for the massive gain in distortion stage
+
+          masterGain.gain.value = this.audioPreset === 'clean' ? 0.4 : 0.05;
+
+      
+
+          // Basic Delay for 'Dreamy'
+
+          if (this.audioPreset === 'dreamy') {
+
+            const delay = this.audioCtx.createDelay();
+
+            delay.delayTime.value = 0.35;
+
+            const delayFeedback = this.audioCtx.createGain();
+
+            delayFeedback.gain.value = 0.4;
+
+            
+
+            cabLP.connect(delay);
+
+            delay.connect(delayFeedback);
+
+            delayFeedback.connect(delay);
+
+            delay.connect(masterGain);
+
+            cabLP.connect(masterGain);
+
+          } else {
+
+            cabLP.connect(masterGain);
+
+          }
+
+      
+
+          masterGain.connect(this.audioCtx.destination);
+
+      
+
+          source.start(time);
+
+          source.stop(time + duration + 1.0);
+
+        }
+
+      
+
+    
     public stop() {
     this.isPlaying = false;
     if (this.timerID) {

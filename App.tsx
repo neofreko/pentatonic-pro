@@ -789,7 +789,7 @@ const App: React.FC = () => {
 
               {isJamming && (
                 <div className="space-y-6 animate-in slide-in-from-top-8 duration-500">
-                  <BackingTrackPlayer rootNote={rootNote} scaleType={scaleType} />
+                  <BackingTrackPlayer rootNote={rootNote} scaleType={scaleType} audioPreset={audioPreset} />
                   
                   <div className="bg-gradient-to-br from-amber-500/20 to-purple-600/20 border border-amber-500/30 rounded-3xl p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 blur-[80px] rounded-full" />
