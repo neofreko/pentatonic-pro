@@ -5,6 +5,7 @@ import { ScaleType, TutorialStep } from './types';
 import { PENTATONIC_POSITIONS } from './data/positions'; // Imported from new data file
 import Fretboard from './components/Fretboard';
 import { useSyllabus } from './hooks/useSyllabus';
+import { BackingTrackPlayer } from './components/BackingTrackPlayer';
 import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2, Settings, X, Key, Lock, LogOut, Zap, Mic2, Keyboard } from 'lucide-react';
 import { playNote, setAudioPreset, startDrone, stopDrone } from './utils/audio';
 import { getIntervalName, getNoteAtPosition } from './utils/musicLogic';
@@ -122,19 +123,6 @@ const App: React.FC = () => {
   const [isJamming, setIsJamming] = useState(false);
   const [jamTip, setJamTip] = useState<string | null>(null);
   const [loadingTip, setLoadingTip] = useState(false);
-
-  // Manage Drone Sound
-  useEffect(() => {
-    if (isJamming) {
-      const rootIdx = NOTES.indexOf(rootNote);
-      // Map to a comfortable bass range (MIDI 36-47 / C2-B2)
-      const droneMidi = 36 + rootIdx; 
-      startDrone(droneMidi);
-    } else {
-      stopDrone();
-    }
-    return () => stopDrone(); // Cleanup on unmount
-  }, [isJamming, rootNote]);
 
   const handleGetJamTip = async () => {
     setLoadingTip(true);
@@ -800,9 +788,12 @@ const App: React.FC = () => {
               </section>
 
               {isJamming && (
-                <div className="bg-gradient-to-br from-amber-500/20 to-purple-600/20 border border-amber-500/30 rounded-3xl p-8 animate-in slide-in-from-top-8 duration-500 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 blur-[80px] rounded-full" />
-                  <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+                <div className="space-y-6 animate-in slide-in-from-top-8 duration-500">
+                  <BackingTrackPlayer rootNote={rootNote} scaleType={scaleType} />
+                  
+                  <div className="bg-gradient-to-br from-amber-500/20 to-purple-600/20 border border-amber-500/30 rounded-3xl p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 blur-[80px] rounded-full" />
+                    <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
                     <div className="w-20 h-20 rounded-full bg-slate-950 border-4 border-amber-500 flex items-center justify-center shadow-2xl flex-shrink-0 animate-bounce-slow">
                       <Mic2 className="w-8 h-8 text-amber-500" />
                     </div>
@@ -847,7 +838,8 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
               {phase === 'LEARNING' && currentStep && !isJamming && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-8 animate-in slide-in-from-left-8 duration-500">
