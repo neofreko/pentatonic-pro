@@ -328,11 +328,17 @@ export class BackingTrackService {
   }
 
   private playGuitarNote(midi: number, time: number, duration: number, velocity: number, articulation?: any, bendAmount = 0) {
+    if (!this.audioCtx) return;
+
     const freq = 440 * Math.pow(2, (midi - 69) / 12);
     const cacheKey = Math.round(freq * 100);
     let buf = this.bufferCache.get(cacheKey);
     if (!buf) { buf = this.generateStringBuffer(freq, 3.0); this.bufferCache.set(cacheKey, buf); }
-    const source = this.audioCtx!.createBufferSource(); source.buffer = buf;
+    
+    const source = this.audioCtx.createBufferSource(); 
+    source.buffer = buf;
+
+    // Pitch Modulation (Bends/Slides)
     if (articulation === 'bend' && bendAmount !== 0) {
       source.playbackRate.setValueAtTime(1.0, time);
       source.playbackRate.exponentialRampToValueAtTime(Math.pow(2, bendAmount / 12), time + 0.3);
@@ -340,15 +346,77 @@ export class BackingTrackService {
       source.playbackRate.setValueAtTime(Math.pow(2, -2 / 12), time);
       source.playbackRate.linearRampToValueAtTime(1.0, time + 0.15);
     }
-    const gain = this.audioCtx!.createGain();
+
+    // --- 1. PRE-AMP (Gain & Dynamics) ---
+    const preAmpGain = this.audioCtx.createGain();
     const isLegato = articulation === 'hammer' || articulation === 'pull';
-    gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(isLegato ? velocity * 0.7 : velocity, time + (isLegato ? 0.05 : 0.01 / velocity));
-    gain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5);
-    const dist = this.audioCtx!.createWaveShaper(); dist.curve = this.makeDistortionCurve(this.audioPreset === 'clean' ? 5 : 200);
-    const filter = this.audioCtx!.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 3500;
-    source.connect(gain); gain.connect(dist); dist.connect(filter); filter.connect(this.audioCtx!.destination);
-    source.start(time); source.stop(time + duration + 2.0);
+    // Scale attack by velocity. Harder = faster/louder.
+    const attackLevel = isLegato ? velocity * 0.7 : velocity;
+    const attackTime = isLegato ? 0.05 : (0.01 / (velocity + 0.1)); // Protect against div/0
+
+    preAmpGain.gain.setValueAtTime(0, time);
+    preAmpGain.gain.linearRampToValueAtTime(attackLevel * 2.0, time + attackTime); // Boost into distortion
+    preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5);
+
+    // --- 2. DISTORTION (The Amp) ---
+    const dist = this.audioCtx.createWaveShaper(); 
+    dist.curve = this.makeDistortionCurve(this.audioPreset === 'clean' ? 5 : 100);
+    dist.oversample = '4x';
+
+    // --- 3. TONESTACK (EQ) ---
+    // Marshall Mid-Hump
+    const midBoost = this.audioCtx.createBiquadFilter();
+    midBoost.type = 'peaking';
+    midBoost.frequency.setValueAtTime(800, time);
+    midBoost.Q.value = 1.0;
+    midBoost.gain.value = 6;
+
+    // --- 4. CABINET SIMULATION ---
+    // 4th Order Filter Chain to remove digital fizz
+    const cabLP1 = this.audioCtx.createBiquadFilter();
+    cabLP1.type = 'lowpass'; cabLP1.frequency.setValueAtTime(3500, time);
+    
+    const cabLP2 = this.audioCtx.createBiquadFilter();
+    cabLP2.type = 'lowpass'; cabLP2.frequency.setValueAtTime(3500, time);
+
+    const cabHP = this.audioCtx.createBiquadFilter();
+    cabHP.type = 'highpass'; cabHP.frequency.setValueAtTime(100, time);
+
+    // --- 5. MASTER & EFFECTS ---
+    const masterGain = this.audioCtx.createGain();
+    masterGain.gain.value = this.audioPreset === 'clean' ? 0.4 : 0.15; // Compensate for high gain
+
+    // Routing
+    source.connect(preAmpGain);
+    preAmpGain.connect(dist);
+    dist.connect(midBoost);
+    midBoost.connect(cabHP);
+    cabHP.connect(cabLP1);
+    cabLP1.connect(cabLP2);
+
+    // Delay for 'Dreamy'
+    if (this.audioPreset === 'dreamy') {
+      const delay = this.audioCtx.createDelay();
+      delay.delayTime.value = 0.35;
+      const delayFb = this.audioCtx.createGain();
+      delayFb.gain.value = 0.4;
+      const delayFilter = this.audioCtx.createBiquadFilter();
+      delayFilter.type = 'lowpass'; delayFilter.frequency.value = 2000;
+
+      cabLP2.connect(delay);
+      delay.connect(delayFilter);
+      delayFilter.connect(delayFb);
+      delayFb.connect(delay);
+      delayFilter.connect(masterGain);
+      cabLP2.connect(masterGain);
+    } else {
+      cabLP2.connect(masterGain);
+    }
+
+    masterGain.connect(this.audioCtx.destination);
+    
+    source.start(time); 
+    source.stop(time + duration + 2.0);
   }
 
   private makeDistortionCurve(amount: number) {

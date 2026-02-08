@@ -11,7 +11,41 @@ describe('BackingTrackService Audio Generation', () => {
       sampleRate: 44100,
       createBuffer: vi.fn().mockImplementation(() => ({
         getChannelData: vi.fn().mockReturnValue(new Float32Array(44100 * 2)) // 2 seconds
-      }))
+      })),
+      createBufferSource: vi.fn().mockReturnValue({
+        connect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+        buffer: null,
+        playbackRate: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() }
+      }),
+      createGain: vi.fn().mockReturnValue({
+        connect: vi.fn(),
+        gain: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() }
+      }),
+      createOscillator: vi.fn().mockReturnValue({
+        connect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+        frequency: { setValueAtTime: vi.fn() }
+      }),
+      createWaveShaper: vi.fn().mockReturnValue({
+        connect: vi.fn(),
+        curve: null,
+        oversample: 'none'
+      }),
+      createBiquadFilter: vi.fn().mockReturnValue({
+        connect: vi.fn(),
+        frequency: { setValueAtTime: vi.fn() },
+        Q: { setValueAtTime: vi.fn(), value: 0 },
+        gain: { setValueAtTime: vi.fn(), value: 0 },
+        type: 'lowpass'
+      }),
+      createDelay: vi.fn().mockReturnValue({
+        connect: vi.fn(),
+        delayTime: { value: 0 }
+      }),
+      destination: {}
     };
     
     // @ts-ignore
@@ -85,5 +119,38 @@ describe('BackingTrackService Audio Generation', () => {
     expect(Math.abs(detCrunchData[checkIndex])).toBeLessThan(Math.abs(detCleanData[checkIndex]));
 
     randomSpy.mockRestore();
+  });
+
+  it('should create amp signal chain nodes (distortion, EQ, cabinet)', () => {
+    const createBiquadFilter = vi.fn().mockReturnValue({
+      connect: vi.fn(),
+      frequency: { setValueAtTime: vi.fn() },
+      Q: { setValueAtTime: vi.fn(), value: 0 },
+      gain: { setValueAtTime: vi.fn(), value: 0 },
+      type: 'lowpass'
+    });
+    
+    const createWaveShaper = vi.fn().mockReturnValue({
+      connect: vi.fn(),
+      curve: null,
+      oversample: 'none'
+    });
+
+    // Update mock for this test
+    // @ts-ignore
+    service.audioCtx.createBiquadFilter = createBiquadFilter;
+    // @ts-ignore
+    service.audioCtx.createWaveShaper = createWaveShaper;
+
+    // Trigger a note
+    // @ts-ignore
+    service.playGuitarNote(60, 0, 1.0, 0.8);
+
+    // Expect WaveShaper (Distortion)
+    expect(createWaveShaper).toHaveBeenCalled();
+
+    // Expect multiple filters (Tonestack + Cabinet)
+    // We expect at least 4 filters: MidBoost, CabHP, CabLP1, CabLP2
+    expect(createBiquadFilter).toHaveBeenCalledTimes(4);
   });
 });
