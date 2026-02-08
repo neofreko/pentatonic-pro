@@ -193,6 +193,12 @@ export class BackingTrackService {
 
       // --- BASS ---
       this.playBass(transposedRoot, time);
+
+      // --- CHORDS ---
+      // Play full chord on the first beat of every bar
+      if (barBeat === 0) {
+        this.playChord(transposedRoot, currentChord.quality, time);
+      }
     }
   }
 
@@ -291,5 +297,42 @@ export class BackingTrackService {
 
     osc.start(time);
     osc.stop(time + 0.4);
+  }
+
+  private playChord(root: string, quality: string, time: number) {
+    if (!this.audioCtx) return;
+
+    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const rootIndex = notes.indexOf(root.toUpperCase().replace('S', '#'));
+    if (rootIndex === -1) return;
+
+    // Middle register for chords (Octave 4)
+    const baseMidi = 48 + rootIndex;
+
+    // Define intervals based on quality
+    let intervals = [0, 4, 7]; // Major default
+    if (quality === 'minor' || quality === 'm' || quality === 'm7') intervals = [0, 3, 7];
+    if (quality === '7') intervals = [0, 4, 7, 10];
+    if (quality === 'maj7') intervals = [0, 4, 7, 11];
+    if (quality === 'dim') intervals = [0, 3, 6];
+
+    intervals.forEach(interval => {
+      const osc = this.audioCtx!.createOscillator();
+      const gain = this.audioCtx!.createGain();
+      const freq = 440 * Math.pow(2, (baseMidi + interval - 69) / 12);
+
+      osc.type = 'sine'; // Soft, pad-like sound
+      osc.frequency.setValueAtTime(freq, time);
+
+      gain.gain.setValueAtTime(0, time);
+      gain.gain.linearRampToValueAtTime(0.05, time + 0.1); // Slow attack
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 1.0); // Long decay
+
+      osc.connect(gain);
+      gain.connect(this.audioCtx!.destination);
+
+      osc.start(time);
+      osc.stop(time + 1.0);
+    });
   }
 }
