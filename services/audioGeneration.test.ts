@@ -49,7 +49,9 @@ describe('BackingTrackService Audio Generation', () => {
     };
     
     // @ts-ignore
-    global.AudioContext = vi.fn().mockImplementation(() => mockAudioContext);
+    global.AudioContext = class {
+      constructor() { return mockAudioContext; }
+    };
     service = new BackingTrackService();
     // @ts-ignore
     service.initAudio();

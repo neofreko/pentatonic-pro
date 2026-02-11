@@ -73,7 +73,9 @@ describe('BackingTrackService', () => {
     };
 
     // @ts-ignore
-    global.AudioContext = vi.fn().mockImplementation(() => mockAudioContext);
+    global.AudioContext = class {
+      constructor() { return mockAudioContext; }
+    };
     
     service = new BackingTrackService();
   });
@@ -101,7 +103,7 @@ describe('BackingTrackService', () => {
 
   it('should throw error when loading invalid track', () => {
     const invalidTrack = { ...mockTrack, progression: [] };
-    expect(() => service.loadTrack(invalidTrack)).toThrow('Progression must contain at least one chord');
+    expect(() => service.loadTrack(invalidTrack)).toThrow('Empty progression');
   });
 
   it('should start and stop playback', async () => {
