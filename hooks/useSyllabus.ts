@@ -3,7 +3,7 @@ import { loadLessons } from '../services/lessonLoader';
 import { getScaleLesson } from '../services/aiService';
 import { Chapter, ScaleType } from '../types';
 
-export type AppPhase = 'PREVIEW' | 'LEARNING' | 'CHALLENGE';
+export type AppPhase = 'PREVIEW' | 'LEARNING' | 'CHALLENGE' | 'PHRASING_LAB';
 
 export const useSyllabus = (rootNote: string, scaleType: ScaleType, currentPosition: number) => {
     const [chapters, setChapters] = useState<Chapter[]>([]);

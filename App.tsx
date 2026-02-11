@@ -624,31 +624,51 @@ const App: React.FC = () => {
                   <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
                 </div>
               ) : (
-                chapters.map((ch, idx) => {
-                  const isActive = currentChapterIndex === idx;
-                  const isCompleted = completedChapters.includes(ch.id);
-                  const isLocked = idx > 0 && !completedChapters.includes(chapters[idx - 1].id);
+                <>
+                  {chapters.map((ch, idx) => {
+                    const isActive = phase !== 'PHRASING_LAB' && currentChapterIndex === idx;
+                    const isCompleted = completedChapters.includes(ch.id);
+                    const isLocked = idx > 0 && !completedChapters.includes(chapters[idx - 1].id);
 
-                  return (
+                    return (
+                      <button
+                        key={ch.id}
+                        onClick={() => !isLocked && selectChapter(idx, (type) => setScaleType(type))}
+                        disabled={isLocked}
+                        className={`w-full text-left group flex items-center gap-4 transition-all ${isActive ? 'translate-x-2' : ''} ${isLocked ? 'cursor-not-allowed' : ''}`}
+                      >
+                        <div className={`flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold transition-all shadow-lg ${isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-amber-500 text-slate-950 scale-110' : isLocked ? 'bg-slate-900 text-slate-700' : 'bg-slate-800 text-slate-600 group-hover:bg-slate-700 group-hover:text-slate-400'
+                          }`}>
+                          {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : isLocked ? <Lock className="w-4 h-4" /> : idx + 1}
+                        </div>
+                        <div className="flex-grow min-w-0">
+                          <div className={`text-sm font-bold transition-colors truncate ${isActive ? 'text-amber-500' : isLocked ? 'text-slate-700' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                            {ch.title}
+                          </div>
+                          <div className="text-[10px] text-slate-600 truncate uppercase font-bold tracking-widest mt-0.5">{isLocked ? 'Locked' : ch.focus}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  <div className="pt-4 border-t border-slate-800/60 mt-4">
                     <button
-                      key={ch.id}
-                      onClick={() => !isLocked && selectChapter(idx, (type) => setScaleType(type))}
-                      disabled={isLocked}
-                      className={`w-full text-left group flex items-center gap-4 transition-all ${isActive ? 'translate-x-2' : ''} ${isLocked ? 'cursor-not-allowed' : ''}`}
+                      onClick={() => setPhase('PHRASING_LAB')}
+                      className={`w-full text-left group flex items-center gap-4 transition-all ${phase === 'PHRASING_LAB' ? 'translate-x-2' : ''}`}
                     >
-                      <div className={`flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold transition-all shadow-lg ${isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-amber-500 text-slate-950 scale-110' : isLocked ? 'bg-slate-900 text-slate-700' : 'bg-slate-800 text-slate-600 group-hover:bg-slate-700 group-hover:text-slate-400'
+                      <div className={`flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold transition-all shadow-lg ${phase === 'PHRASING_LAB' ? 'bg-indigo-600 text-white scale-110 shadow-indigo-500/20' : 'bg-slate-800 text-slate-600 group-hover:bg-slate-700 group-hover:text-slate-400'
                         }`}>
-                        {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : isLocked ? <Lock className="w-4 h-4" /> : idx + 1}
+                        <PlayCircle className="w-5 h-5" />
                       </div>
                       <div className="flex-grow min-w-0">
-                        <div className={`text-sm font-bold transition-colors truncate ${isActive ? 'text-amber-500' : isLocked ? 'text-slate-700' : 'text-slate-400 group-hover:text-slate-300'}`}>
-                          {ch.title}
+                        <div className={`text-sm font-bold transition-colors truncate ${phase === 'PHRASING_LAB' ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                          Phrasing Lab
                         </div>
-                        <div className="text-[10px] text-slate-600 truncate uppercase font-bold tracking-widest mt-0.5">{isLocked ? 'Locked' : ch.focus}</div>
+                        <div className="text-[10px] text-slate-600 truncate uppercase font-bold tracking-widest mt-0.5">Iconic Solos</div>
                       </div>
                     </button>
-                  );
-                })
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -667,6 +687,26 @@ const App: React.FC = () => {
               <button onClick={startChallenge} className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${phase === 'CHALLENGE' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-slate-300'}`}>
                 <Trophy className="w-4 h-4" /> Challenge
               </button>
+              <button onClick={() => setPhase('PHRASING_LAB')} className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${phase === 'PHRASING_LAB' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-slate-300'}`}>
+                <PlayCircle className="w-4 h-4" /> Phrasing Lab
+              </button>
+            </div>
+          )}
+
+          {phase === 'PHRASING_LAB' && (
+            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-slate-900/40 border border-slate-800/50 rounded-[2.5rem] p-12 relative overflow-hidden shadow-3xl">
+                <div className="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500/5 blur-[120px] rounded-full" />
+                <div className="relative z-10">
+                  <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-6 border border-indigo-500/20">
+                    <Music className="w-3 h-3" /> Advanced Phrasing
+                  </span>
+                  <h2 className="text-6xl font-black mb-8 leading-tight tracking-tighter text-white">Phrasing Lab</h2>
+                  <p className="text-xl text-slate-400 leading-relaxed mb-8 font-medium">Study and practice iconic solos. Learn how legendary players use the pentatonic scale to create memorable phrases.</p>
+                  
+                  <NoodleLibrary playNoodle={playNoodle} currentKey={rootNote} />
+                </div>
+              </div>
             </div>
           )}
 
@@ -1009,10 +1049,6 @@ const App: React.FC = () => {
               }
             </div >
           )}
-
-          <div className="mt-20">
-            <NoodleLibrary playNoodle={playNoodle} currentKey={rootNote} />
-          </div>
         </main >
       </div >
       <footer className="max-w-7xl mx-auto w-full mt-auto py-12 border-t border-slate-900 text-center">
