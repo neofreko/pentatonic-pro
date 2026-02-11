@@ -407,25 +407,47 @@ export class BackingTrackService {
 
   private generateStringBuffer(frequency: number, duration: number): AudioBuffer {
     const sampleRate = this.audioCtx!.sampleRate;
-    const N = Math.round(sampleRate / frequency);
+    const L = sampleRate / frequency; // Exact fractional period
+    const N = Math.floor(L);
+    const frac = L - N;
+
     const buffer = this.audioCtx!.createBuffer(1, sampleRate * duration, sampleRate);
     const data = buffer.getChannelData(0);
     
-    // Filtered noise excitation (reduces sitar-like harshness)
+    // 1. Filtered Excitation (Pick Simulation)
+    // We use a shorter noise burst and a simple low-pass to simulate a pick
     let lastNoise = 0;
     for (let i = 0; i < N; i++) {
-      const noise = Math.random() * 2 - 1;
+      const noise = (Math.random() * 2 - 1);
+      // Filter noise to remove harsh sitar-like highs at the start
       data[i] = 0.5 * (noise + lastNoise);
       lastNoise = noise;
     }
 
-    // Frequency-dependent decay calculation (T60 target)
-    // Low notes sustain longer, high notes decay faster
-    const T60 = this.audioPreset === 'clean' ? 3.5 : 2.5;
-    const decay = Math.pow(0.001, 1.0 / (frequency * T60));
+    // 2. Loop with Linear Interpolation for Tuning Accuracy
+    // Frequency-dependent sustain (T60)
+    const T60 = this.audioPreset === 'clean' ? 4.0 : 3.0;
+    const decayCoefficient = Math.pow(0.001, 1.0 / (frequency * T60));
+
+    // Secondary low-pass filter state
+    let lastOut = 0;
 
     for (let i = N; i < data.length; i++) {
-      data[i] = 0.5 * (data[i - N] + (i - N - 1 >= 0 ? data[i - N - 1] : 0)) * decay;
+      // Linear interpolation for fractional delay
+      const idx1 = i - N;
+      const idx2 = i - N - 1;
+      
+      const val1 = data[idx1];
+      const val2 = idx2 >= 0 ? data[idx2] : 0;
+      
+      // Interpolate between samples for exact pitch
+      const interpolated = val1 * (1 - frac) + val2 * frac;
+      
+      // Moving average low-pass (Loss filter)
+      const currentOut = 0.5 * (interpolated + lastOut);
+      lastOut = interpolated;
+
+      data[i] = currentOut * decayCoefficient;
     }
     return buffer;
   }
