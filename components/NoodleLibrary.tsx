@@ -27,6 +27,14 @@ export const NoodleLibrary: React.FC<NoodleLibraryProps> = ({ playNoodle, curren
             color: 'text-indigo-400'
         },
         {
+            id: 'texas_flood',
+            name: 'Texas Flood',
+            author: 'SRV Style',
+            style: 'Blues',
+            description: 'Aggressive rakes, wide bends, and rhythmic power phrasing.',
+            color: 'text-orange-500'
+        },
+        {
             id: 'rock_slash',
             name: 'Top Hat Shred',
             author: 'Rock Legend',
