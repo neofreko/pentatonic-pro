@@ -1,131 +1,127 @@
+import * as Tone from 'tone';
 
-let audioCtx: AudioContext | null = null;
-let currentPreset: 'clean' | 'crunch' | 'dreamy' = 'clean';
+// Effects Chain
+const reverb = new Tone.Reverb({
+  decay: 2.5,
+  wet: 0.3
+}).toDestination();
 
-const getAudioContext = () => {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+const compressor = new Tone.Compressor({
+  threshold: -20,
+  ratio: 3
+}).connect(reverb);
+
+// Guitar Synth: Karplus-Strong physical modeling
+const guitarSynth = new Tone.PluckSynth({
+  attackNoise: 1,
+  dampening: 4000,
+  resonance: 0.95,
+  volume: -6
+}).connect(compressor);
+
+// Drone Synth: Warm background pad for jamming
+const droneSynth = new Tone.MonoSynth({
+  oscillator: { type: "sawtooth" },
+  envelope: { attack: 2, decay: 1, sustain: 1, release: 4 },
+  filterEnvelope: { attack: 2, decay: 0, sustain: 1, release: 4, baseFrequency: 200, octaves: 2 },
+  volume: -24
+}).connect(reverb);
+
+// Metronome Synth: Percussive click
+const metroSynth = new Tone.MembraneSynth({
+  pitchDecay: 0.05,
+  octaves: 2,
+  envelope: { attack: 0.001, decay: 0.1, sustain: 0 },
+  volume: -15
+}).toDestination();
+
+let activeSequence: Tone.Sequence | null = null;
+let metronomeLoop: Tone.Loop | null = null;
+
+export const initAudio = async () => {
+  if (Tone.getTransport().state !== 'started') {
+    await Tone.start();
+    Tone.getTransport().start();
   }
-  return audioCtx;
 };
 
-// Simple Distortion Curve
-function makeDistortionCurve(amount: number) {
-  const k = typeof amount === 'number' ? amount : 50;
-  const n_samples = 44100;
-  const curve = new Float32Array(n_samples);
-  const deg = Math.PI / 180;
-  for (let i = 0; i < n_samples; ++i) {
-    const x = (i * 2) / n_samples - 1;
-    curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
-  }
-  return curve;
-}
-
-let droneOsc: OscillatorNode | null = null;
-let droneGain: GainNode | null = null;
-
-export const stopDrone = () => {
-  if (droneOsc) {
-    const ctx = getAudioContext();
-    const now = ctx.currentTime;
-    try {
-      droneGain?.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-      droneOsc.stop(now + 0.5);
-    } catch (e) {
-      // Ignore cleanup errors
-    }
-    droneOsc = null;
-    droneGain = null;
-  }
-};
-
-export const startDrone = (rootMidi: number) => {
-  stopDrone(); // Stop any existing drone
-  const ctx = getAudioContext();
-  if (ctx.state === 'suspended') ctx.resume();
-
-  droneOsc = ctx.createOscillator();
-  droneGain = ctx.createGain();
-
-  // Drop 2 octaves for deep bass drone
-  const bassMidi = rootMidi - 24; 
-  const freq = 440 * Math.pow(2, (bassMidi - 69) / 12);
-
-  droneOsc.type = 'sawtooth'; // Richer harmonic content
-  droneOsc.frequency.setValueAtTime(freq, ctx.currentTime);
-
-  // Low Pass Filter to make it warm and not buzzy
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.value = 200; // Deep warmth
-
-  // Volume envelope
-  droneGain.gain.setValueAtTime(0, ctx.currentTime);
-  droneGain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 1.0); // Slow fade in
-
-  droneOsc.connect(filter);
-  filter.connect(droneGain);
-  droneGain.connect(ctx.destination);
-
-  droneOsc.start();
-};
-
-export const setAudioPreset = (preset: 'clean' | 'crunch' | 'dreamy') => {
-  currentPreset = preset;
+export const setBpm = (bpm: number) => {
+  Tone.getTransport().bpm.value = bpm;
 };
 
 export const playNote = (midiNote: number) => {
-  const ctx = getAudioContext();
-  if (ctx.state === 'suspended') ctx.resume();
+  const freq = Tone.Frequency(midiNote, "midi").toFrequency();
+  guitarSynth.triggerAttack(freq, Tone.now());
+};
 
-  const oscillator = ctx.createOscillator();
-  const gainNode = ctx.createGain();
-  const now = ctx.currentTime;
-
-  // Frequency calculation from MIDI
-  const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
-
-  oscillator.type = 'triangle';
-  oscillator.frequency.setValueAtTime(freq, now);
-
-  // Initial Gain Setup
-  gainNode.gain.setValueAtTime(0, now);
-
-  // Routing based on preset
-  let lastNode: AudioNode = gainNode;
-
-  if (currentPreset === 'crunch') {
-    const dist = ctx.createWaveShaper();
-    dist.curve = makeDistortionCurve(100);
-    dist.oversample = '4x';
-    lastNode.connect(dist);
-    lastNode = dist;
-
-    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-  } else if (currentPreset === 'dreamy') {
-    const delay = ctx.createDelay();
-    delay.delayTime.value = 0.4;
-    const delayGain = ctx.createGain();
-    delayGain.gain.value = 0.4;
-
-    lastNode.connect(delay);
-    delay.connect(delayGain);
-    delayGain.connect(delay); // Feedback
-    delayGain.connect(ctx.destination);
-
-    gainNode.gain.linearRampToValueAtTime(0.15, now + 0.02);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+/**
+ * Toggles a continuous background drone of the root note.
+ */
+export const toggleDrone = (midiNote: number, isActive: boolean) => {
+  if (isActive) {
+    // Play an octave lower for a thick bass drone
+    const freq = Tone.Frequency(midiNote - 12, "midi").toFrequency();
+    droneSynth.triggerAttack(freq);
   } else {
-    // Clean
-    gainNode.gain.linearRampToValueAtTime(0.2, now + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    droneSynth.triggerRelease();
+  }
+};
+
+export const startSequence = (
+  notes: { midi: number, id: string }[], 
+  onStep: (noteId: string | null) => void,
+  onComplete: () => void,
+  isLooping: boolean = false
+) => {
+  stopActiveSequence();
+
+  activeSequence = new Tone.Sequence(
+    (time, note) => {
+      const freq = Tone.Frequency(note.midi, "midi").toFrequency();
+      guitarSynth.triggerAttack(freq, time);
+      
+      Tone.Draw.schedule(() => {
+        onStep(note.id);
+      }, time);
+    },
+    notes,
+    "8n"
+  );
+
+  activeSequence.loop = isLooping;
+  activeSequence.start(0);
+
+  if (!isLooping) {
+    const duration = notes.length * Tone.Time("8n").toSeconds();
+    Tone.getTransport().scheduleOnce(() => {
+      Tone.Draw.schedule(() => {
+        onComplete();
+        onStep(null);
+      }, Tone.now());
+    }, `+${duration}`);
+  }
+};
+
+export const stopActiveSequence = () => {
+  if (activeSequence) {
+    activeSequence.stop();
+    activeSequence.dispose();
+    activeSequence = null;
+  }
+};
+
+export const toggleMetronome = (isActive: boolean) => {
+  if (!metronomeLoop) {
+    metronomeLoop = new Tone.Loop((time) => {
+      const isDownbeat = Math.round(Tone.getTransport().seconds / Tone.Time("4n").toSeconds()) % 4 === 0;
+      const pitch = isDownbeat ? "C5" : "C4";
+      metroSynth.triggerAttackRelease(pitch, "32n", time);
+    }, "4n");
   }
 
-  oscillator.connect(gainNode);
-  lastNode.connect(ctx.destination);
-
-  oscillator.start();
-  oscillator.stop(now + 2.5);
+  if (isActive) {
+    metronomeLoop.start(0);
+  } else {
+    metronomeLoop.stop();
+  }
 };
