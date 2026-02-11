@@ -151,8 +151,8 @@ describe('BackingTrackService Audio Generation', () => {
     // Expect WaveShaper (Distortion)
     expect(createWaveShaper).toHaveBeenCalled();
 
-    // Expect multiple filters (Tonestack + Cabinet)
-    // We expect at least 4 filters: MidBoost, CabHP, CabLP1, CabLP2
-    expect(createBiquadFilter).toHaveBeenCalledTimes(4);
+    // Expect multiple filters (Tonestack + Body + Cabinet)
+    // We expect 5 filters: MidBoost, BodyResonance, CabHP, CabLP1, CabLP2
+    expect(createBiquadFilter).toHaveBeenCalledTimes(5);
   });
 });

@@ -72,6 +72,13 @@ export class BackingTrackService {
     midBoost.frequency.value = 800;
     midBoost.gain.value = 6;
 
+    // Body Resonance (adds 'wood' and warmth, reducing sitar twang)
+    const bodyResonance = ctx.createBiquadFilter();
+    bodyResonance.type = 'peaking';
+    bodyResonance.frequency.value = 200;
+    bodyResonance.Q.value = 0.5;
+    bodyResonance.gain.value = 4;
+
     const cabLP1 = ctx.createBiquadFilter();
     cabLP1.type = 'lowpass'; cabLP1.frequency.value = 3500;
     const cabLP2 = ctx.createBiquadFilter();
@@ -84,11 +91,12 @@ export class BackingTrackService {
 
     // Static Routing
     dist.connect(midBoost);
-    midBoost.connect(cabHP);
+    midBoost.connect(bodyResonance);
+    bodyResonance.connect(cabHP);
     cabHP.connect(cabLP1);
     cabLP1.connect(cabLP2);
 
-    let nodes: any = { dist, midBoost, cabLP1, cabLP2, cabHP, master };
+    let nodes: any = { dist, midBoost, bodyResonance, cabLP1, cabLP2, cabHP, master };
 
     if (this.audioPreset === 'dreamy') {
       const d = ctx.createDelay(); d.delayTime.value = 0.35;
@@ -402,8 +410,20 @@ export class BackingTrackService {
     const N = Math.round(sampleRate / frequency);
     const buffer = this.audioCtx!.createBuffer(1, sampleRate * duration, sampleRate);
     const data = buffer.getChannelData(0);
-    for (let i = 0; i < N; i++) data[i] = Math.random() * 2 - 1;
-    const decay = this.audioPreset === 'clean' ? 0.998 : 0.995;
+    
+    // Filtered noise excitation (reduces sitar-like harshness)
+    let lastNoise = 0;
+    for (let i = 0; i < N; i++) {
+      const noise = Math.random() * 2 - 1;
+      data[i] = 0.5 * (noise + lastNoise);
+      lastNoise = noise;
+    }
+
+    // Frequency-dependent decay calculation (T60 target)
+    // Low notes sustain longer, high notes decay faster
+    const T60 = this.audioPreset === 'clean' ? 3.5 : 2.5;
+    const decay = Math.pow(0.001, 1.0 / (frequency * T60));
+
     for (let i = N; i < data.length; i++) {
       data[i] = 0.5 * (data[i - N] + (i - N - 1 >= 0 ? data[i - N - 1] : 0)) * decay;
     }
