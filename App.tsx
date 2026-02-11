@@ -8,6 +8,7 @@ import { useSyllabus } from './hooks/useSyllabus';
 import { useBackingTrack } from './hooks/useBackingTrack';
 import { BackingTrackPlayer } from './components/BackingTrackPlayer';
 import { NoodleLibrary } from './components/NoodleLibrary';
+import { KarplusStrongLab } from './components/KarplusStrongLab';
 import { NOODLE_LIBRARY } from './data/noodleLibrary';
 import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2, Settings, X, Key, Lock, LogOut, Zap, Mic2, Keyboard, Play as PlayIcon } from 'lucide-react';
 import { playNote, setAudioPreset, startDrone, stopDrone } from './utils/audio';
@@ -705,6 +706,19 @@ const App: React.FC = () => {
                   <p className="text-xl text-slate-400 leading-relaxed mb-8 font-medium">Study and practice iconic solos. Learn how legendary players use the pentatonic scale to create memorable phrases.</p>
                   
                   <NoodleLibrary playNoodle={playNoodle} currentKey={rootNote} />
+
+                  <div className="pt-12 mt-12 border-t border-slate-800/60">
+                    <div className="max-w-2xl">
+                      <h4 className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Science of Tone</h4>
+                      <h3 className="text-3xl font-black text-white mb-4 tracking-tight">Physical Modeling</h3>
+                      <p className="text-slate-400 leading-relaxed">
+                        Ever wonder how code becomes a guitar sound? This lab implements the <strong>Karplus-Strong</strong> algorithm. 
+                        It plucks a "virtual string" with a burst of noise, then loops that noise through a moving-average filter—simulating 
+                        how a real string vibrates and loses energy over time.
+                      </p>
+                    </div>
+                    <KarplusStrongLab />
+                  </div>
                 </div>
               </div>
             </div>
