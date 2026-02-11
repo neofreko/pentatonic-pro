@@ -13,23 +13,33 @@ export class BackingTrackService {
   private track: BackingTrack | null = null;
   private targetKey: string = 'A';
   private isPlaying: boolean = false;
-  
+
   // Scheduling state
   private currentSubBeat: number = 0; // 8th notes (0-7 for a 4/4 bar)
   private tempo: number = 120;
   private nextNoteTime: number = 0;
   private timerID: number | null = null;
-  
+
   // AudioBuffer cache for Karplus-Strong Lead
   private bufferCache: Map<number, AudioBuffer> = new Map();
-  
-  // Scheduler tuning
-  private lookAhead: number = 25.0; 
-  private scheduleAheadTime: number = 0.1; 
-  
-  private audioPreset: 'clean' | 'crunch' | 'dreamy' = 'clean';
 
-  constructor() {}
+  // Scheduler tuning
+  private lookAhead: number = 25.0;
+  private scheduleAheadTime: number = 0.1;
+
+  private audioPreset: 'clean' | 'crunch' | 'dreamy' = 'clean';
+  private sharedDistCurve: Float32Array | null = null;
+  private sharedNodes: {
+    dist: WaveShaperNode;
+    midBoost: BiquadFilterNode;
+    cabLP1: BiquadFilterNode;
+    cabLP2: BiquadFilterNode;
+    cabHP: BiquadFilterNode;
+    master: GainNode;
+    delay?: { d: DelayNode; f: BiquadFilterNode; g: GainNode };
+  } | null = null;
+
+  constructor() { }
 
   private initAudio() {
     if (!this.audioCtx) {
@@ -40,9 +50,67 @@ export class BackingTrackService {
   public setAudioPreset(preset: 'clean' | 'crunch' | 'dreamy') {
     if (this.audioPreset !== preset) {
       this.audioPreset = preset;
-      this.bufferCache.clear(); // Recalculate strings for new tone
+      this.bufferCache.clear();
+      this.sharedDistCurve = null; // Forces recalculation
+      this.sharedNodes = null;
       console.log(`[BackingTrackService] Audio preset set to ${preset}`);
     }
+  }
+
+  private getSharedNodes() {
+    this.initAudio();
+    if (this.sharedNodes) return this.sharedNodes;
+
+    const ctx = this.audioCtx!;
+
+    const dist = ctx.createWaveShaper();
+    dist.curve = this.getDistCurve() as any;
+    dist.oversample = '4x';
+
+    const midBoost = ctx.createBiquadFilter();
+    midBoost.type = 'peaking';
+    midBoost.frequency.value = 800;
+    midBoost.gain.value = 6;
+
+    const cabLP1 = ctx.createBiquadFilter();
+    cabLP1.type = 'lowpass'; cabLP1.frequency.value = 3500;
+    const cabLP2 = ctx.createBiquadFilter();
+    cabLP2.type = 'lowpass'; cabLP2.frequency.value = 3500;
+    const cabHP = ctx.createBiquadFilter();
+    cabHP.type = 'highpass'; cabHP.frequency.value = 100;
+
+    const master = ctx.createGain();
+    master.gain.value = this.audioPreset === 'clean' ? 0.4 : 0.15;
+
+    // Static Routing
+    dist.connect(midBoost);
+    midBoost.connect(cabHP);
+    cabHP.connect(cabLP1);
+    cabLP1.connect(cabLP2);
+
+    let nodes: any = { dist, midBoost, cabLP1, cabLP2, cabHP, master };
+
+    if (this.audioPreset === 'dreamy') {
+      const d = ctx.createDelay(); d.delayTime.value = 0.35;
+      const g = ctx.createGain(); g.gain.value = 0.4;
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2000;
+      cabLP2.connect(d); d.connect(f); f.connect(g); g.connect(d); f.connect(master);
+      cabLP2.connect(master);
+      nodes.delay = { d, f, g };
+    } else {
+      cabLP2.connect(master);
+    }
+
+    master.connect(ctx.destination);
+    this.sharedNodes = nodes;
+    return nodes;
+  }
+
+  private getDistCurve() {
+    if (this.sharedDistCurve) return this.sharedDistCurve;
+    const amount = this.audioPreset === 'clean' ? 5 : 100;
+    this.sharedDistCurve = this.makeDistortionCurve(amount);
+    return this.sharedDistCurve;
   }
 
   /**
@@ -144,7 +212,7 @@ export class BackingTrackService {
     const subBeatsPerBar = (this.track.timeSignature[0] || 4) * 2;
     const barSubBeat = subBeat % subBeatsPerBar;
     const beat = Math.floor(subBeat / 2);
-    
+
     // Find chord
     let acc = 0;
     let currentChord = this.track.progression[0];
@@ -176,7 +244,7 @@ export class BackingTrackService {
 
       // BASS: Eighth notes following the root
       this.playBass(root, time, isDownbeat ? 0.8 : 0.5);
-    } 
+    }
     else if (this.track.style === 'blues') {
       // Shuffle feel (swinging the 8ths is hard without 16ths, but we'll accent)
       if (barSubBeat === 0 || barSubBeat === 4) this.playKick(time);
@@ -294,20 +362,35 @@ export class BackingTrackService {
     });
   }
 
-  public async playNoodle() {
+  public async playNoodle(sample?: any[]) {
     this.initAudio();
     if (this.audioCtx?.state === 'suspended') await this.audioCtx.resume();
-    if (!this.track?.noodleSample || !this.audioCtx) return;
+    const activeSample = sample || this.track?.noodleSample;
+    if (!activeSample || !this.audioCtx) return;
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const targetKeyIdx = notes.indexOf(this.targetKey.toUpperCase().replace('S', '#'));
-    const baseMidi = 48 + (targetKeyIdx === -1 ? 9 : targetKeyIdx); 
+    const baseMidi = 48 + (targetKeyIdx === -1 ? 9 : targetKeyIdx);
     const secondsPerBeat = 60.0 / this.tempo;
     const now = this.audioCtx.currentTime;
     let acc = 0;
-    this.track.noodleSample.forEach((item, index) => {
+
+    // 1. PRE-CACHE: Avoid blocking the thread during scheduling
+    activeSample.forEach(item => {
+      if (item.note !== null) {
+        const freq = 440 * Math.pow(2, (baseMidi + item.note - 69) / 12);
+        const cacheKey = Math.round(freq * 100);
+        if (!this.bufferCache.has(cacheKey)) {
+          this.bufferCache.set(cacheKey, this.generateStringBuffer(freq, 2.0));
+        }
+      }
+    });
+
+    // 2. SCHEDULE: Now the main loop is just pointer connections
+    activeSample.forEach((item, index) => {
       const durSec = item.duration * secondsPerBeat;
       if (item.note !== null) {
-        const jitter = index === 0 ? 0 : (Math.random() * 0.03 - 0.015);
+        // Reduced jitter to prevent "stutter" feel
+        const jitter = (Math.random() * 0.01 - 0.005);
         this.playGuitarNote(baseMidi + item.note, now + acc + jitter, durSec * 0.95, item.velocity || 0.8, item.articulation, item.bendAmount);
       }
       acc += durSec;
@@ -329,16 +412,20 @@ export class BackingTrackService {
 
   private playGuitarNote(midi: number, time: number, duration: number, velocity: number, articulation?: any, bendAmount = 0) {
     if (!this.audioCtx) return;
+    const nodes = this.getSharedNodes();
 
     const freq = 440 * Math.pow(2, (midi - 69) / 12);
     const cacheKey = Math.round(freq * 100);
     let buf = this.bufferCache.get(cacheKey);
-    if (!buf) { buf = this.generateStringBuffer(freq, 3.0); this.bufferCache.set(cacheKey, buf); }
-    
-    const source = this.audioCtx.createBufferSource(); 
+
+    if (!buf) {
+      buf = this.generateStringBuffer(freq, 2.0);
+      this.bufferCache.set(cacheKey, buf);
+    }
+
+    const source = this.audioCtx.createBufferSource();
     source.buffer = buf;
 
-    // Pitch Modulation (Bends/Slides)
     if (articulation === 'bend' && bendAmount !== 0) {
       source.playbackRate.setValueAtTime(1.0, time);
       source.playbackRate.exponentialRampToValueAtTime(Math.pow(2, bendAmount / 12), time + 0.3);
@@ -347,85 +434,30 @@ export class BackingTrackService {
       source.playbackRate.linearRampToValueAtTime(1.0, time + 0.15);
     }
 
-    // --- 1. PRE-AMP (Gain & Dynamics) ---
-    const preAmpGain = this.audioCtx.createGain();
+    const envelope = this.audioCtx.createGain();
     const isLegato = articulation === 'hammer' || articulation === 'pull';
-    // Scale attack by velocity. Harder = faster/louder.
     const attackLevel = isLegato ? velocity * 0.7 : velocity;
-    const attackTime = isLegato ? 0.05 : (0.01 / (velocity + 0.1)); // Protect against div/0
+    const attackTime = isLegato ? 0.05 : (0.01 / (velocity + 0.1));
 
-    preAmpGain.gain.setValueAtTime(0, time);
-    preAmpGain.gain.linearRampToValueAtTime(attackLevel * 2.0, time + attackTime); // Boost into distortion
-    preAmpGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 1.5);
+    envelope.gain.setValueAtTime(0, time);
+    envelope.gain.linearRampToValueAtTime(attackLevel * 2.0, time + attackTime);
+    envelope.gain.exponentialRampToValueAtTime(0.001, time + duration + 1.2);
 
-    // --- 2. DISTORTION (The Amp) ---
-    const dist = this.audioCtx.createWaveShaper(); 
-    dist.curve = this.makeDistortionCurve(this.audioPreset === 'clean' ? 5 : 100);
-    dist.oversample = '4x';
+    // Route through shared signal chain
+    source.connect(envelope);
+    envelope.connect(nodes.dist);
 
-    // --- 3. TONESTACK (EQ) ---
-    // Marshall Mid-Hump
-    const midBoost = this.audioCtx.createBiquadFilter();
-    midBoost.type = 'peaking';
-    midBoost.frequency.setValueAtTime(800, time);
-    midBoost.Q.value = 1.0;
-    midBoost.gain.value = 6;
-
-    // --- 4. CABINET SIMULATION ---
-    // 4th Order Filter Chain to remove digital fizz
-    const cabLP1 = this.audioCtx.createBiquadFilter();
-    cabLP1.type = 'lowpass'; cabLP1.frequency.setValueAtTime(3500, time);
-    
-    const cabLP2 = this.audioCtx.createBiquadFilter();
-    cabLP2.type = 'lowpass'; cabLP2.frequency.setValueAtTime(3500, time);
-
-    const cabHP = this.audioCtx.createBiquadFilter();
-    cabHP.type = 'highpass'; cabHP.frequency.setValueAtTime(100, time);
-
-    // --- 5. MASTER & EFFECTS ---
-    const masterGain = this.audioCtx.createGain();
-    masterGain.gain.value = this.audioPreset === 'clean' ? 0.4 : 0.15; // Compensate for high gain
-
-    // Routing
-    source.connect(preAmpGain);
-    preAmpGain.connect(dist);
-    dist.connect(midBoost);
-    midBoost.connect(cabHP);
-    cabHP.connect(cabLP1);
-    cabLP1.connect(cabLP2);
-
-    // Delay for 'Dreamy'
-    if (this.audioPreset === 'dreamy') {
-      const delay = this.audioCtx.createDelay();
-      delay.delayTime.value = 0.35;
-      const delayFb = this.audioCtx.createGain();
-      delayFb.gain.value = 0.4;
-      const delayFilter = this.audioCtx.createBiquadFilter();
-      delayFilter.type = 'lowpass'; delayFilter.frequency.value = 2000;
-
-      cabLP2.connect(delay);
-      delay.connect(delayFilter);
-      delayFilter.connect(delayFb);
-      delayFb.connect(delay);
-      delayFilter.connect(masterGain);
-      cabLP2.connect(masterGain);
-    } else {
-      cabLP2.connect(masterGain);
-    }
-
-    masterGain.connect(this.audioCtx.destination);
-    
-    source.start(time); 
-    source.stop(time + duration + 2.0);
+    source.start(time);
+    source.stop(time + duration + 1.5);
   }
 
-  private makeDistortionCurve(amount: number) {
+  private makeDistortionCurve(amount: number): any {
     const curve = new Float32Array(44100);
     for (let i = 0; i < 44100; i++) {
-      const x = (i * 2) / 44100 - 1 + 0.05;
+      const x = (i * 2) / 44100 - 1;
       if (x > 0) curve[i] = (2 / Math.PI) * Math.atan(x * amount);
       else curve[i] = (x * 1.5) / (1 + Math.abs(x) * (amount / 2));
     }
-    return curve;
+    return curve as any;
   }
 }

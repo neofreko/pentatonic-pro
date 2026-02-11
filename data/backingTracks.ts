@@ -59,24 +59,49 @@ export const BACKING_TRACKS: BackingTrack[] = [
       { root: 'D', quality: 'minor', duration: 4 },
       { root: 'E', quality: '7', duration: 4 },
     ],
-        noodleSample: parseNoodle(NOODLE_LIBRARY.soul_maggot)
-      },
-      {
-        id: 'hard-rock-e',
-        name: 'Hard Rock Groove',
-        description: 'Aggressive and driving rock in E Minor.',
-        key: 'E',
-        mode: 'minor',
-            tempo: 135,
-            timeSignature: [4, 4],
-            style: 'rock',
-            progression: [
-              { root: 'E', quality: 'power', duration: 4 },
-              { root: 'C', quality: 'power', duration: 4 },
-              { root: 'D', quality: 'power', duration: 4 },
-              { root: 'E', quality: 'power', duration: 4 },
-            ],
-            noodleSample: parseNoodle(NOODLE_LIBRARY.rock_hard)
-          }
-        ];
-        
+    noodleSample: parseNoodle(NOODLE_LIBRARY.soul_maggot)
+  },
+  {
+    id: 'hard-rock-e',
+    name: 'Hard Rock Groove',
+    description: 'Aggressive and driving rock in E Minor.',
+    key: 'E',
+    mode: 'minor',
+    tempo: 135,
+    timeSignature: [4, 4],
+    style: 'rock',
+    progression: [
+      { root: 'E', quality: 'power', duration: 4 },
+      { root: 'C', quality: 'power', duration: 4 },
+      { root: 'D', quality: 'power', duration: 4 },
+      { root: 'E', quality: 'power', duration: 4 },
+    ],
+    noodleSample: parseNoodle(NOODLE_LIBRARY.rock_hard)
+  },
+  {
+    id: 'blues-solo-lesson',
+    name: 'Blues Solo Lesson',
+    description: 'Practice the classic Mini Solo 1 by Happy Bluesman.',
+    key: 'A',
+    mode: 'blues',
+    tempo: 90,
+    timeSignature: [4, 4],
+    style: 'blues',
+    progression: [
+      { root: 'A', quality: '7', duration: 4 },
+      { root: 'D', quality: '7', duration: 4 },
+      { root: 'A', quality: '7', duration: 4 },
+      { root: 'A', quality: '7', duration: 4 },
+      { root: 'D', quality: '7', duration: 4 },
+      { root: 'D', quality: '7', duration: 4 },
+      { root: 'A', quality: '7', duration: 4 },
+      { root: 'A', quality: '7', duration: 4 },
+      { root: 'E', quality: '7', duration: 4 },
+      { root: 'D', quality: '7', duration: 4 },
+      { root: 'A', quality: '7', duration: 4 },
+      { root: 'E', quality: '7', duration: 4 },
+    ],
+    // @ts-ignore
+    noodleSample: parseNoodle(NOODLE_LIBRARY.blues_solo_1)
+  }
+];

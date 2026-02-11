@@ -29,6 +29,7 @@ export interface TutorialStep {
   title: string;
   instruction: string;
   targetInterval?: string; // If set, user must click this to proceed
+  noodleId?: string; // If set, this step can trigger a specific audio sample
   actionText: string;
 }
 

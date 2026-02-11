@@ -1,39 +1,38 @@
 import React, { useEffect, useMemo } from 'react';
 import { Play, Square, Music, Timer, ChevronDown } from 'lucide-react';
-import { useBackingTrack } from '../hooks/useBackingTrack';
-import { ScaleType } from '../types';
+import { BackingTrack, ScaleType } from '../types';
 
 interface BackingTrackPlayerProps {
   rootNote: string;
   scaleType: ScaleType;
   audioPreset: 'clean' | 'crunch' | 'dreamy';
+  isPlaying: boolean;
+  currentBeat: number;
+  currentBar: number;
+  tempo: number;
+  currentTrack: BackingTrack | null;
+  loadTrack: (track: BackingTrack) => void;
+  togglePlay: () => void;
+  setTempo: (bpm: number) => void;
+  playNoodle: (sample?: any[]) => void;
+  availableTracks: BackingTrack[];
 }
 
-export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote, scaleType, audioPreset }) => {
-  const { 
-    isPlaying, 
-    currentBeat, 
-    currentBar, 
-    tempo, 
-    currentTrack, 
-    loadTrack, 
-    togglePlay, 
-    setTempo, 
-    setTargetKey,
-    setAudioPreset,
-    playNoodle,
-    availableTracks 
-  } = useBackingTrack();
-
-  // Sync target key with root note
-  useEffect(() => {
-    setTargetKey(rootNote);
-  }, [rootNote, setTargetKey]);
-
-  // Sync audio preset
-  useEffect(() => {
-    setAudioPreset(audioPreset);
-  }, [audioPreset, setAudioPreset]);
+export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({
+  rootNote,
+  scaleType,
+  audioPreset,
+  isPlaying,
+  currentBeat,
+  currentBar,
+  tempo,
+  currentTrack,
+  loadTrack,
+  togglePlay,
+  setTempo,
+  playNoodle,
+  availableTracks
+}) => {
 
   // Filter tracks by mode
   const filteredTracks = useMemo(() => {
@@ -56,13 +55,13 @@ export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote
   const getTransposedChord = (originalChordRoot: string) => {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     if (!currentTrack) return originalChordRoot;
-    
+
     const trackKeyIndex = notes.indexOf(currentTrack.key.toUpperCase().replace('S', '#'));
     const targetKeyIndex = notes.indexOf(rootNote.toUpperCase().replace('S', '#'));
     const chordRootIndex = notes.indexOf(originalChordRoot.toUpperCase().replace('S', '#'));
-    
+
     if (trackKeyIndex === -1 || targetKeyIndex === -1 || chordRootIndex === -1) return originalChordRoot;
-    
+
     const interval = (targetKeyIndex - trackKeyIndex + 12) % 12;
     const transposedRootIndex = (chordRootIndex + interval) % 12;
     return notes[transposedRootIndex];
@@ -81,7 +80,7 @@ export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote
               <span className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-500 animate-pulse' : 'bg-slate-700'}`} />
             </div>
             <div className="relative group">
-              <select 
+              <select
                 className="bg-transparent text-white font-bold text-lg appearance-none pr-8 cursor-pointer outline-none hover:text-indigo-400 transition-colors"
                 value={currentTrack?.id || ''}
                 onChange={(e) => {
@@ -102,9 +101,9 @@ export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote
           <div className="flex flex-col items-center">
             <span className="text-[10px] font-black text-slate-600 uppercase tracking-tighter mb-1">Tempo</span>
             <div className="flex items-center gap-3 bg-slate-950/50 px-4 py-2 rounded-xl border border-white/5">
-              <input 
-                type="number" 
-                value={tempo} 
+              <input
+                type="number"
+                value={tempo}
                 onChange={(e) => setTempo(parseInt(e.target.value, 10))}
                 className="bg-transparent w-12 text-center font-mono text-sm font-bold text-indigo-400 outline-none"
               />
@@ -121,27 +120,26 @@ export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote
             </div>
           </div>
 
-          <button 
+          <button
             onClick={togglePlay}
             disabled={!currentTrack}
-            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-90 disabled:opacity-30 disabled:grayscale ${
-              isPlaying 
-                ? 'bg-red-500 text-white shadow-red-500/20 hover:bg-red-400' 
-                : 'bg-indigo-600 text-white shadow-indigo-600/20 hover:bg-indigo-500'
-            }`}
+            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-90 disabled:opacity-30 disabled:grayscale ${isPlaying
+              ? 'bg-red-500 text-white shadow-red-500/20 hover:bg-red-400'
+              : 'bg-indigo-600 text-white shadow-indigo-600/20 hover:bg-indigo-500'
+              }`}
           >
             {isPlaying ? <Square className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-1" />}
           </button>
         </div>
       </div>
-      
+
       {currentTrack && (
         <div className="mt-4 pt-4 border-t border-white/5 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-1">
               <p className="text-xs text-slate-500 italic">"{currentTrack.description}" — Playing in <span className="text-indigo-400 font-bold">{rootNote} {scaleType}</span></p>
-              <button 
-                onClick={playNoodle}
+              <button
+                onClick={() => playNoodle()}
                 className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors w-fit group"
               >
                 <Play className="w-3 h-3 fill-current group-hover:scale-110 transition-transform" />
@@ -154,13 +152,12 @@ export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({ rootNote
                 const currentBarIndex = Math.floor(currentBeat / beatsPerBar);
                 const isActive = isPlaying && i === currentBarIndex;
                 const transposedRoot = getTransposedChord(chord.root);
-                
+
                 return (
-                  <div 
-                    key={i} 
-                    className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all whitespace-nowrap border ${
-                      isActive ? 'bg-indigo-500 text-white border-indigo-400 scale-110 shadow-lg shadow-indigo-500/20' : 'bg-slate-800/50 text-slate-600 border-white/5'
-                    }`}
+                  <div
+                    key={i}
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all whitespace-nowrap border ${isActive ? 'bg-indigo-500 text-white border-indigo-400 scale-110 shadow-lg shadow-indigo-500/20' : 'bg-slate-800/50 text-slate-600 border-white/5'
+                      }`}
                   >
                     {transposedRoot}{chord.quality === 'major' ? '' : chord.quality === 'minor' ? 'm' : chord.quality}
                   </div>

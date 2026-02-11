@@ -113,8 +113,9 @@ describe('App', () => {
                 fireEvent.click(noteBtn);
             }
 
-            // Verify hint is cleared
-            pulsingNotes = document.querySelectorAll('.animate-pulse');
+            // Verify hint is cleared on the fretboard (avoiding other UI elements that might pulse like Jam Mode)
+            const fretboardContainer = document.querySelector('.bg-\\[\\#0a0f1d\\]');
+            pulsingNotes = fretboardContainer?.querySelectorAll('.animate-pulse') || [];
             expect(pulsingNotes.length).toBe(0);
         });
 

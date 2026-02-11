@@ -97,8 +97,8 @@ export const useBackingTrack = () => {
     serviceRef.current?.setAudioPreset(preset);
   }, []);
 
-  const playNoodle = useCallback(() => {
-    serviceRef.current?.playNoodle();
+  const playNoodle = useCallback((sample?: any[]) => {
+    serviceRef.current?.playNoodle(sample);
   }, []);
 
   return {

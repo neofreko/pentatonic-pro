@@ -110,6 +110,7 @@ const parseMarkdownLessons = (markdown: string): Chapter[] => {
             } else if (processingSection === 'STEP' && currentStep) {
                 if (key === 'instruction') currentStep.instruction = value;
                 if (key === 'targetInterval') currentStep.targetInterval = value;
+                if (key === 'noodleId') currentStep.noodleId = value;
                 if (key === 'actionText') currentStep.actionText = value;
             } else if (processingSection === 'CHALLENGE' && currentChallenge) {
                 if (key === 'type') currentChallenge.type = value as any;

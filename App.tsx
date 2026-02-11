@@ -5,8 +5,11 @@ import { ScaleType, TutorialStep } from './types';
 import { PENTATONIC_POSITIONS } from './data/positions'; // Imported from new data file
 import Fretboard from './components/Fretboard';
 import { useSyllabus } from './hooks/useSyllabus';
+import { useBackingTrack } from './hooks/useBackingTrack';
 import { BackingTrackPlayer } from './components/BackingTrackPlayer';
-import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2, Settings, X, Key, Lock, LogOut, Zap, Mic2, Keyboard } from 'lucide-react';
+import { NoodleLibrary } from './components/NoodleLibrary';
+import { NOODLE_LIBRARY } from './data/noodleLibrary';
+import { Music, Sparkles, ChevronRight, Play, Volume2, CheckCircle2, ListChecks, Trophy, GraduationCap, PlayCircle, Award, Hash, Type as TypeIcon, ChevronLeft, RotateCcw, Activity, Loader2, Settings, X, Key, Lock, LogOut, Zap, Mic2, Keyboard, Play as PlayIcon } from 'lucide-react';
 import { playNote, setAudioPreset, startDrone, stopDrone } from './utils/audio';
 import { getIntervalName, getNoteAtPosition } from './utils/musicLogic';
 import { initiateOpenRouterLogin, handleOpenRouterCallback } from './utils/openRouterAuth';
@@ -90,6 +93,31 @@ const App: React.FC = () => {
     fetchLesson,
     selectChapter
   } = useSyllabus(rootNote, scaleType, currentPosition);
+
+  const {
+    isPlaying: trackIsPlaying,
+    currentBeat: trackCurrentBeat,
+    currentBar: trackCurrentBar,
+    tempo: trackTempo,
+    currentTrack,
+    loadTrack,
+    togglePlay,
+    setTempo,
+    setTargetKey,
+    setAudioPreset: setTrackAudioPreset,
+    playNoodle,
+    availableTracks
+  } = useBackingTrack();
+
+  // Sync target key with root note
+  useEffect(() => {
+    setTargetKey(rootNote);
+  }, [rootNote, setTargetKey]);
+
+  // Sync audio preset
+  useEffect(() => {
+    setTrackAudioPreset(audioPreset);
+  }, [audioPreset, setTrackAudioPreset]);
 
   const [successNoteIds, setSuccessNoteIds] = useState<string[]>([]);
   const [errorNoteId, setErrorNoteId] = useState<string | null>(null);
@@ -215,7 +243,7 @@ const App: React.FC = () => {
 
   const handleNoteClick = useCallback((s: number, f: number, noteName: string, interval: string) => {
     const noteId = `${s}-${f}`;
-    
+
     // Play the audio
     const midi = MIDI_TUNING[s] + f;
     playNote(midi);
@@ -431,8 +459,8 @@ const App: React.FC = () => {
               setIsJamming(!isJamming);
               if (!isJamming) setJamTip(null); // Reset tip on start
             }}
-            className={`p-3 border rounded-2xl transition-all backdrop-blur-md flex items-center gap-2 ${isJamming 
-              ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.4)] animate-pulse' 
+            className={`p-3 border rounded-2xl transition-all backdrop-blur-md flex items-center gap-2 ${isJamming
+              ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.4)] animate-pulse'
               : 'bg-slate-900/40 border-slate-800/50 text-slate-400 hover:text-amber-500 hover:bg-slate-800'}`}
             title="Jam Mode"
           >
@@ -789,57 +817,71 @@ const App: React.FC = () => {
 
               {isJamming && (
                 <div className="space-y-6 animate-in slide-in-from-top-8 duration-500">
-                  <BackingTrackPlayer rootNote={rootNote} scaleType={scaleType} audioPreset={audioPreset} />
-                  
+                  <BackingTrackPlayer
+                    rootNote={rootNote}
+                    scaleType={scaleType}
+                    audioPreset={audioPreset}
+                    isPlaying={trackIsPlaying}
+                    currentBeat={trackCurrentBeat}
+                    currentBar={trackCurrentBar}
+                    tempo={trackTempo}
+                    currentTrack={currentTrack}
+                    loadTrack={loadTrack}
+                    togglePlay={togglePlay}
+                    setTempo={setTempo}
+                    playNoodle={playNoodle}
+                    availableTracks={availableTracks}
+                  />
+
                   <div className="bg-gradient-to-br from-amber-500/20 to-purple-600/20 border border-amber-500/30 rounded-3xl p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 blur-[80px] rounded-full" />
                     <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
-                    <div className="w-20 h-20 rounded-full bg-slate-950 border-4 border-amber-500 flex items-center justify-center shadow-2xl flex-shrink-0 animate-bounce-slow">
-                      <Mic2 className="w-8 h-8 text-amber-500" />
-                    </div>
-                    <div className="flex-grow space-y-4">
-                      <h4 className="text-amber-500 text-xs font-black uppercase tracking-[0.3em]">AI Jam Coach</h4>
-                      
-                      {!jamTip ? (
-                        <div className="space-y-2">
-                          <h3 className="text-3xl font-black text-white italic tracking-tight">"Ready to make some noise?"</h3>
-                          <p className="text-slate-300 font-medium">I'm listening. Hit the button below and I'll give you a fun riff idea!</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4 animate-in fade-in zoom-in duration-300">
-                          <div className="text-2xl font-bold text-white leading-relaxed font-mono bg-slate-950/50 p-6 rounded-2xl border border-white/10 shadow-inner">
-                            "{jamTip}"
-                          </div>
-                        </div>
-                      )}
-                      
-                      <button 
-                        onClick={handleGetJamTip} 
-                        disabled={loadingTip}
-                        className="px-8 py-4 bg-amber-500 text-slate-950 rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(245,158,11,0.4)] flex items-center gap-3 mx-auto md:mx-0"
-                      >
-                        {loadingTip ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                        {jamTip ? "Give me another one!" : "Get a Noodle Idea"}
-                      </button>
+                      <div className="w-20 h-20 rounded-full bg-slate-950 border-4 border-amber-500 flex items-center justify-center shadow-2xl flex-shrink-0 animate-bounce-slow">
+                        <Mic2 className="w-8 h-8 text-amber-500" />
+                      </div>
+                      <div className="flex-grow space-y-4">
+                        <h4 className="text-amber-500 text-xs font-black uppercase tracking-[0.3em]">AI Jam Coach</h4>
 
-                      <div className="pt-4 flex flex-wrap items-center gap-3 justify-center md:justify-start">
-                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-950/40 px-3 py-1.5 rounded-lg border border-white/5">
-                          <Keyboard className="w-3 h-3 text-amber-500/50" />
-                          <span>Keyboard Mapping:</span>
-                        </div>
-                        <div className="flex gap-1.5">
-                          {['A','S','D','F','G','H','J','K','L',';',"'"].map((k, i) => (
-                            <div key={k} className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border transition-all ${i < notesInBox.length ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-900/50 border-slate-800/50 text-slate-700'}`}>
-                              {k}
+                        {!jamTip ? (
+                          <div className="space-y-2">
+                            <h3 className="text-3xl font-black text-white italic tracking-tight">"Ready to make some noise?"</h3>
+                            <p className="text-slate-300 font-medium">I'm listening. Hit the button below and I'll give you a fun riff idea!</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4 animate-in fade-in zoom-in duration-300">
+                            <div className="text-2xl font-bold text-white leading-relaxed font-mono bg-slate-950/50 p-6 rounded-2xl border border-white/10 shadow-inner">
+                              "{jamTip}"
                             </div>
-                          ))}
+                          </div>
+                        )}
+
+                        <button
+                          onClick={handleGetJamTip}
+                          disabled={loadingTip}
+                          className="px-8 py-4 bg-amber-500 text-slate-950 rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(245,158,11,0.4)] flex items-center gap-3 mx-auto md:mx-0"
+                        >
+                          {loadingTip ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                          {jamTip ? "Give me another one!" : "Get a Noodle Idea"}
+                        </button>
+
+                        <div className="pt-4 flex flex-wrap items-center gap-3 justify-center md:justify-start">
+                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-950/40 px-3 py-1.5 rounded-lg border border-white/5">
+                            <Keyboard className="w-3 h-3 text-amber-500/50" />
+                            <span>Keyboard Mapping:</span>
+                          </div>
+                          <div className="flex gap-1.5">
+                            {['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', "'"].map((k, i) => (
+                              <div key={k} className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border transition-all ${i < notesInBox.length ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-900/50 border-slate-800/50 text-slate-700'}`}>
+                                {k}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
               {phase === 'LEARNING' && currentStep && !isJamming && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-8 animate-in slide-in-from-left-8 duration-500">
@@ -852,9 +894,25 @@ const App: React.FC = () => {
                       <h5 className="text-2xl font-black text-white mb-4 tracking-tight">{currentStep.title}</h5>
                       <p className="text-slate-300 text-lg font-medium leading-relaxed max-w-2xl">{currentStep.instruction}</p>
                       <div className="mt-8 flex items-center gap-4">
-                        <div className="px-5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-slate-400">
-                          Goal: {currentStep.actionText}
-                        </div>
+                        {currentStep.noodleId ? (
+                          <button
+                            onClick={() => {
+                              const sample = (NOODLE_LIBRARY as any)[currentStep.noodleId!];
+                              if (sample) {
+                                playNoodle(sample);
+                                setTutorialSuccess(true);
+                              }
+                            }}
+                            className="flex items-center gap-3 px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-500 active:scale-95 transition-all shadow-xl shadow-indigo-600/20 group"
+                          >
+                            <PlayIcon className="w-4 h-4 fill-current group-hover:scale-110 transition-transform" />
+                            {currentStep.actionText}
+                          </button>
+                        ) : (
+                          <div className="px-5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-slate-400">
+                            Goal: {currentStep.actionText}
+                          </div>
+                        )}
                         {tutorialSuccess && (
                           <button
                             onClick={() => {
@@ -951,6 +1009,10 @@ const App: React.FC = () => {
               }
             </div >
           )}
+
+          <div className="mt-20">
+            <NoodleLibrary playNoodle={playNoodle} currentKey={rootNote} />
+          </div>
         </main >
       </div >
       <footer className="max-w-7xl mx-auto w-full mt-auto py-12 border-t border-slate-900 text-center">
