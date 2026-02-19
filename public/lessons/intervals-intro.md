@@ -10,10 +10,15 @@ instruction: The Root is your starting point—the "Home" note. Every other note
 targetInterval: R
 actionText: Locate the Root (R)
 
-## Tutorial Step: Perfect vs. Flat
-instruction: A "Perfect" interval (like the 4th or 5th) sounds very stable. A "Flat" or "Minor" interval (indicated by a 'b') is lowered by one fret. For example, the 5th is 7 frets away, and the b5 is 6 frets away.
+## Tutorial Step: Counting to the 5th
+instruction: Why is the 5th exactly 7 frets away? Because we count every single fret (Half Step) starting from the Root. 1 fret = b2, 2 = 2, 3 = b3, 4 = 3, 5 = 4, 6 = b5, and finally 7 = 5. By counting up 7 frets, you are moving through 7 "Half Steps" to reach that stable Perfect 5th sound.
 targetInterval: 5
-actionText: Find the Perfect 5th (7 frets up)
+actionText: Count 7 frets up to the 5th
+
+## Tutorial Step: Lowering to the Flat 5th (b5)
+instruction: A "Flat" (b) symbol means we take a Perfect interval and lower it by exactly one fret. If the 5th is 7 frets away, the "Flat 5th" (b5) must be 6 frets away. It's the "tension" note that sits right next to the 5th.
+targetInterval: b5
+actionText: Find the b5 (6 frets up)
 
 ## Tutorial Step: The Octave
 instruction: When you move 12 frets up, you reach the same note again at a higher pitch. This is called an Octave. On the guitar, you can also find an octave by skipping one string and moving up two frets.
