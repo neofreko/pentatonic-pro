@@ -15,10 +15,10 @@ instruction: A Whole Step (W) is 2 frets. Move up 2 frets from the Root. This la
 targetInterval: 2
 actionText: Move up a Whole Step (2)
 
-## Tutorial Step: The Pentatonic Recipe
-instruction: The **Minor Pentatonic** has a different recipe: **(W+H) - W - W - (W+H) - W**. The first step is a "Minor 3rd" jump (3 frets). Move 3 frets up from your Root.
+## Tutorial Step: Flattening the 3rd
+instruction: The **Minor Pentatonic** recipe starts with a large gap: **(W+H) - W - W - (W+H) - W**. It's easier to think of this first jump as finding the **3rd degree** (which is 4 frets away) and then **flattening** it by one fret. This gives you the **b3** (3 frets up). By thinking this way, you're just taking a standard major interval and lowering it, keeping your "recipe" logic the same!
 targetInterval: b3
-actionText: Jump 3 frets (b3)
+actionText: Find the Flattened 3rd (b3)
 
 ## Proficiency Challenge
 type: FIND_INTERVALS
