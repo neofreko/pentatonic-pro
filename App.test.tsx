@@ -183,7 +183,7 @@ describe('App', () => {
             const pulsingNotes = Array.from(document.querySelectorAll('.animate-pulse'));
             expect(pulsingNotes.length).toBeGreaterThan(0);
 
-            pulsingNotes.forEach(node => {
+            pulsingNotes.forEach(() => {
                 // In our implementation, we'd need to check the data-fret or similar
                 // But since it's in the DOM rendered by Fretboard (which only does 0-15), 
                 // the mere presence of a pulsing note in the DOM proves it's within range.

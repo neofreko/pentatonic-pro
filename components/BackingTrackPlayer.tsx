@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo } from 'react';
-import { Play, Square, Music, Timer, ChevronDown } from 'lucide-react';
+import { Play, Square, Music, ChevronDown } from 'lucide-react';
 import { BackingTrack, ScaleType } from '../types';
 
 interface BackingTrackPlayerProps {
   rootNote: string;
   scaleType: ScaleType;
-  audioPreset: 'clean' | 'crunch' | 'dreamy';
   isPlaying: boolean;
   currentBeat: number;
   currentBar: number;
@@ -21,7 +20,6 @@ interface BackingTrackPlayerProps {
 export const BackingTrackPlayer: React.FC<BackingTrackPlayerProps> = ({
   rootNote,
   scaleType,
-  audioPreset,
   isPlaying,
   currentBeat,
   currentBar,

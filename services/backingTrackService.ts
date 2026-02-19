@@ -394,7 +394,7 @@ export class BackingTrackService {
     });
 
     // 2. SCHEDULE: Now the main loop is just pointer connections
-    activeSample.forEach((item, index) => {
+    activeSample.forEach((item) => {
       const durSec = item.duration * secondsPerBeat;
       if (item.note !== null) {
         // Reduced jitter to prevent "stutter" feel

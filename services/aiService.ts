@@ -1,7 +1,44 @@
-import { GoogleGenAI } from "@google/genai";
 import { ScaleType, Chapter } from "../types";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+/**
+ * Generic helper to call OpenRouter API.
+ * This decouples the app from any specific AI provider SDK.
+ */
+const callOpenRouter = async (prompt: string, userModel?: string) => {
+  const apiKey = localStorage.getItem('openrouter_api_key') || process.env.OPENROUTER_API_KEY || (import.meta as any).env?.VITE_OPENROUTER_API_KEY;
+  const model = userModel || localStorage.getItem('openrouter_model') || "google/gemini-2.0-flash-001";
+
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY_MISSING");
+  }
+
+  const response = await fetch(OPENROUTER_API_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://pentatonic-pro.pages.dev",
+      "X-Title": "Pentatonic Pro",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      "model": model,
+      "messages": [
+        { "role": "user", "content": prompt }
+      ]
+    })
+  });
+
+  const data = await response.json();
+
+  if (data.error) {
+    console.error("OpenRouter Error:", data.error);
+    throw new Error(data.error.message || "OpenRouter API error");
+  }
+
+  return data.choices?.[0]?.message?.content || "";
+};
 
 export const getScaleLesson = async (
   rootNote: string, 
@@ -12,15 +49,6 @@ export const getScaleLesson = async (
   mode: 'CURRICULUM' | 'PHRASING' = 'CURRICULUM',
   pattern?: string
 ) => {
-  const openRouterKey = localStorage.getItem('openrouter_api_key') || process.env.OPENROUTER_API_KEY || (import.meta as any).env?.VITE_OPENROUTER_API_KEY;
-  let openRouterModel = localStorage.getItem('openrouter_model') || process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
-
-  // Immediate migration for deprecated models in code logic
-  if (openRouterModel === 'google/gemini-flash-1.5') openRouterModel = 'google/gemini-2.0-flash-001';
-  if (openRouterModel === 'google/gemini-pro-1.5') openRouterModel = 'google/gemini-2.5-pro';
-
-  const geminiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
-
   const chapterContext = chapter && mode === 'CURRICULUM'
     ? `We are currently on Chapter: "${chapter.title}"
        Focus: ${chapter.focus}
@@ -67,59 +95,14 @@ export const getScaleLesson = async (
 
   Format the response in clean Markdown.`;
 
-  // Try OpenRouter first if key is available
-  if (openRouterKey) {
-    try {
-      const response = await fetch(OPENROUTER_API_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openRouterKey}`,
-          "HTTP-Referer": "https://pentatonic-pro.pages.dev",
-          "X-Title": "Pentatonic Pro",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "model": openRouterModel,
-          "messages": [
-            { "role": "user", "content": prompt }
-          ]
-        })
-      });
-
-      const data = await response.json();
-      if (data.choices && data.choices[0]?.message?.content) {
-        return data.choices[0].message.content;
-      } else if (data.error) {
-        console.error("OpenRouter Error Object:", data.error);
-        if (data.error.code === 401) throw new Error("Invalid API Key");
-        throw new Error(data.error.message || "OpenRouter API error");
-      }
-    } catch (error: any) {
-      console.error("OpenRouter API Error:", error);
-      if (error.message === "Invalid API Key") return "Error: Invalid OpenRouter API Key. Please check your settings.";
-      // Fall through to Gemini if enabled
+  try {
+    return await callOpenRouter(prompt);
+  } catch (error: any) {
+    if (error.message === "OPENROUTER_API_KEY_MISSING") {
+      return "Please set your OpenRouter API key in settings to get personalized AI lessons!";
     }
+    return `AI Error: ${error.message}`;
   }
-
-  // Fallback to Gemini
-  if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: prompt,
-      });
-      return response.text;
-    } catch (error) {
-      console.error("Gemini API Error:", error);
-    }
-  }
-
-  if (!openRouterKey && !geminiKey) {
-    return "Please set your OpenRouter API key in settings to get personalized AI lessons!";
-  }
-
-  return "I couldn't fetch a tailored lesson right now. Use the visualizer to explore the fretboard nodes and intervals!";
 };
 
 export const testOpenRouterConnection = async (apiKey: string, model: string) => {
@@ -152,10 +135,6 @@ export const testOpenRouterConnection = async (apiKey: string, model: string) =>
 };
 
 export const getJamTip = async (rootNote: string, scaleType: ScaleType) => {
-  const openRouterKey = localStorage.getItem('openrouter_api_key') || process.env.OPENROUTER_API_KEY || (import.meta as any).env?.VITE_OPENROUTER_API_KEY;
-  let openRouterModel = localStorage.getItem('openrouter_model') || process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
-  const geminiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
-
   const prompt = `You are a high-energy, fun guitar coach in a "Jam Session" mode.
   
   CONTEXT:
@@ -173,42 +152,10 @@ export const getJamTip = async (rootNote: string, scaleType: ScaleType) => {
   
   Keep it under 30 words. Make it sound exciting! Use emojis 🎸🔥`;
 
-  // Try OpenRouter
-  if (openRouterKey) {
-    try {
-      const response = await fetch(OPENROUTER_API_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openRouterKey}`,
-          "HTTP-Referer": "https://pentatonic-pro.pages.dev",
-          "X-Title": "Pentatonic Pro",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "model": openRouterModel,
-          "messages": [{ "role": "user", "content": prompt }]
-        })
-      });
-      const data = await response.json();
-      return data.choices?.[0]?.message?.content || "Rock on! Just feel the groove!";
-    } catch (e) {
-      console.error(e);
-    }
+  try {
+    return await callOpenRouter(prompt);
+  } catch (e) {
+    console.error(e);
+    return "Try playing a rhythmic motif: Long-Short-Short-Long!";
   }
-
-  // Fallback Gemini
-  if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: prompt,
-      });
-      return response.text;
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  return "Try playing a rhythmic motif: Long-Short-Short-Long!";
 };
