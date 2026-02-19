@@ -12,32 +12,30 @@ export const isNoteInScale = (noteName: string, rootNote: string, scaleType: Sca
   const rootIndex = NOTES.indexOf(rootNote);
   const noteIndex = NOTES.indexOf(noteName);
   const relativeInterval = (noteIndex - rootIndex + 12) % 12;
-  return (SCALE_INTERVALS as any)[scaleType].includes(relativeInterval);
+  const intervals = (SCALE_INTERVALS as any)[scaleType];
+  if (!intervals) return false;
+  return intervals.includes(relativeInterval);
 };
 
-export const getIntervalName = (noteName: string, rootNote: string, scaleType: ScaleType): string => {
+export const getIntervalName = (noteName: string, rootNote: string, _scaleType: ScaleType): string => {
   const rootIndex = NOTES.indexOf(rootNote);
   const noteIndex = NOTES.indexOf(noteName);
   const diff = (noteIndex - rootIndex + 12) % 12;
 
-  if (scaleType === 'minor') {
-    switch (diff) {
-      case 0: return 'R';
-      case 3: return 'b3';
-      case 5: return '4';
-      case 6: return 'b5'; // Added support for Chapter 3 Blue Note
-      case 7: return '5';
-      case 10: return 'b7';
-      default: return '';
-    }
-  } else {
-    switch (diff) {
-      case 0: return 'R';
-      case 2: return '2';
-      case 4: return '3';
-      case 7: return '5';
-      case 9: return '6';
-      default: return '';
-    }
-  }
+  const intervalMap: Record<number, string> = {
+    0: 'R',
+    1: 'b2',
+    2: '2',
+    3: 'b3',
+    4: '3',
+    5: '4',
+    6: 'b5',
+    7: '5',
+    8: 'b6',
+    9: '6',
+    10: 'b7',
+    11: '7'
+  };
+
+  return intervalMap[diff] || '';
 };
