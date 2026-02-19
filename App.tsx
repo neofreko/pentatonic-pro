@@ -247,6 +247,17 @@ const App: React.FC = () => {
     if (activeNoteTimeoutRef.current) window.clearTimeout(activeNoteTimeoutRef.current);
     activeNoteTimeoutRef.current = window.setTimeout(() => setActiveNoteId(null), 1000);
 
+    if (phase === 'LEARNING' && currentStep?.targetInterval) {
+      if (interval === currentStep.targetInterval) {
+        setSuccessNoteIds(prev => [...prev, noteId]);
+        setTutorialSuccess(true);
+      } else {
+        setErrorNoteId(`${s}-${f}`);
+        setTimeout(() => setErrorNoteId(null), 500);
+      }
+      return;
+    }
+
     if (phase === 'CHALLENGE') {
       if (challengeComplete || successNoteIds.includes(noteId)) return;
       if (interval === currentChapter?.challenge?.targetInterval) {
@@ -263,7 +274,7 @@ const App: React.FC = () => {
         setTimeout(() => setErrorNoteId(null), 500);
       }
     }
-  }, [phase, challengeComplete, successNoteIds, currentChapter, completedChapters, rootNote, scaleType, currentPositionNoteIds]);
+  }, [phase, challengeComplete, successNoteIds, currentChapter, completedChapters, rootNote, scaleType, currentPositionNoteIds, currentStep, setTutorialSuccess, activeStepIndex]);
 
   const startChallenge = () => {
     setPhase('CHALLENGE');
@@ -706,6 +717,7 @@ const App: React.FC = () => {
                               {tutorialSuccess && (
                                 <button
                                   onClick={() => {
+                                    setSuccessNoteIds([]);
                                     if (activeStepIndex < currentChapter.tutorialSteps.length - 1) {
                                       setActiveStepIndex(activeStepIndex + 1);
                                       setTutorialSuccess(false);
