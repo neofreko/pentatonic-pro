@@ -18,6 +18,7 @@ interface FretboardProps {
   successNoteIds?: string[];
   errorNoteId?: string | null;
   highlightInterval?: string | null;
+  hintNoteId?: string | null;
 }
 
 const Fretboard: React.FC<FretboardProps> = ({ 
@@ -33,7 +34,8 @@ const Fretboard: React.FC<FretboardProps> = ({
   hideLabels = false,
   successNoteIds = [],
   errorNoteId = null,
-  highlightInterval = null
+  highlightInterval = null,
+  hintNoteId = null
 }) => {
   const strings = [0, 1, 2, 3, 4, 5]; 
   const stringNotes = ['E', 'B', 'G', 'D', 'A', 'E'];
@@ -64,7 +66,8 @@ const Fretboard: React.FC<FretboardProps> = ({
     trailIndex: number, // 0 is most recent, 3 is oldest
     isSuccess: boolean, 
     isError: boolean, 
-    isDimmed: boolean
+    isDimmed: boolean,
+    isHint: boolean
   ) => {
     let base = "w-11 h-11 rounded-full flex flex-col items-center justify-center transition-all duration-300 relative border-none cursor-pointer shadow-xl ring-2 ring-offset-2 ring-offset-[#0d121f]";
     let colors = getIntervalColor(interval, isDimmed);
@@ -73,6 +76,9 @@ const Fretboard: React.FC<FretboardProps> = ({
     if (isCurrentlyPlaying) {
       colors = "bg-white text-slate-950 ring-white scale-125 z-[100] ring-offset-4";
       effects = "shadow-[0_0_50px_rgba(255,255,255,0.7)]";
+    } else if (isHint) {
+      colors = "bg-amber-500 text-slate-950 ring-amber-400 scale-110 z-30 animate-pulse";
+      effects = "shadow-[0_0_30px_rgba(245,158,11,0.6)] ring-4 ring-offset-4";
     } else if (isTrailNote) {
       // Trail notes get progressively more transparent and lose their scale-up
       const opacity = [0.8, 0.6, 0.4, 0.2][trailIndex] || 0.1;
@@ -153,11 +159,19 @@ const Fretboard: React.FC<FretboardProps> = ({
 
         <div className="flex-grow flex flex-col">
           <div className="flex mb-10 px-0">
-            {Array.from({ length: FRET_COUNT + 1 }).map((_, f) => (
-              <div key={`top-num-${f}`} className="flex-1 text-center text-[13px] text-slate-500 font-black tracking-widest uppercase">
-                {getFretLabel(f)}
-              </div>
-            ))}
+            {Array.from({ length: FRET_COUNT + 1 }).map((_, f) => {
+              const isInBox = boxRange && f >= boxRange.min && f <= boxRange.max;
+              return (
+                <div 
+                  key={`top-num-${f}`} 
+                  className={`flex-1 text-center text-[15px] font-black tracking-widest uppercase transition-colors duration-500 ${
+                    isInBox ? 'text-amber-500' : 'text-slate-400'
+                  }`}
+                >
+                  {getFretLabel(f)}
+                </div>
+              );
+            })}
           </div>
 
           <div className="relative h-[26rem] flex rounded-[3rem] overflow-hidden border border-slate-800/80 bg-[#0d121f] shadow-[inset_0_4px_80px_rgba(0,0,0,1)]">
@@ -201,6 +215,7 @@ const Fretboard: React.FC<FretboardProps> = ({
                         
                         const isSuccess = successNoteIds.includes(noteId);
                         const isError = errorNoteId === noteId;
+                        const isHintNote = hintNoteId === noteId;
                         const isInPosition = positionNoteIds?.has(noteId);
                         
                         const isHighlighted = !highlightInterval || interval === highlightInterval;
@@ -227,10 +242,11 @@ const Fretboard: React.FC<FretboardProps> = ({
                                     trailIndex,
                                     !!isSuccess, 
                                     !!isError, 
-                                    shouldDim
+                                    shouldDim,
+                                    isHintNote
                                   )}
                                 >
-                                  {(!hideLabels || isSuccess || isCurrentlyPlaying || isTrailNote) && (
+                                  {(!hideLabels || isSuccess || isCurrentlyPlaying || isTrailNote || isHintNote) && (
                                     <div className="flex flex-col items-center justify-center -space-y-1.5 pointer-events-none">
                                       <span className="text-[18px] font-black tracking-tighter">
                                         {showIntervals ? interval : noteName}
@@ -249,13 +265,21 @@ const Fretboard: React.FC<FretboardProps> = ({
               })}
             </div>
           </div>
-          
-          <div className="flex mt-10 opacity-20">
-            {Array.from({ length: FRET_COUNT + 1 }).map((_, f) => (
-              <div key={`bottom-num-${f}`} className="flex-1 text-center text-[11px] text-slate-500 font-black tracking-widest uppercase">
-                {getFretLabel(f)}
-              </div>
-            ))}
+
+          <div className="flex mt-10">
+            {Array.from({ length: FRET_COUNT + 1 }).map((_, f) => {
+              const isInBox = boxRange && f >= boxRange.min && f <= boxRange.max;
+              return (
+                <div 
+                  key={`bottom-num-${f}`} 
+                  className={`flex-1 text-center text-[13px] font-black tracking-widest uppercase transition-colors duration-500 ${
+                    isInBox ? 'text-amber-500/50' : 'text-slate-500'
+                  }`}
+                >
+                  {getFretLabel(f)}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

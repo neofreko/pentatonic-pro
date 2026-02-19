@@ -125,3 +125,20 @@ export const toggleMetronome = (isActive: boolean) => {
     metronomeLoop.stop();
   }
 };
+
+export const setAudioPreset = (preset: 'clean' | 'crunch' | 'dreamy') => {
+  switch (preset) {
+    case 'clean':
+      guitarSynth.set({ dampening: 4000, resonance: 0.95 });
+      reverb.set({ wet: 0.3 });
+      break;
+    case 'crunch':
+      guitarSynth.set({ dampening: 2000, resonance: 0.8 });
+      reverb.set({ wet: 0.4 });
+      break;
+    case 'dreamy':
+      guitarSynth.set({ dampening: 6000, resonance: 0.98 });
+      reverb.set({ wet: 0.6 });
+      break;
+  }
+};

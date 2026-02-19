@@ -12,7 +12,7 @@ export const isNoteInScale = (noteName: string, rootNote: string, scaleType: Sca
   const rootIndex = NOTES.indexOf(rootNote);
   const noteIndex = NOTES.indexOf(noteName);
   const relativeInterval = (noteIndex - rootIndex + 12) % 12;
-  return SCALE_INTERVALS[scaleType].includes(relativeInterval);
+  return (SCALE_INTERVALS as any)[scaleType].includes(relativeInterval);
 };
 
 export const getIntervalName = (noteName: string, rootNote: string, scaleType: ScaleType): string => {
