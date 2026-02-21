@@ -12,14 +12,15 @@ actionText: Locate the Root (R)
 
 ## Tutorial Step: Counting to the 5th
 instruction: Why is the 5th exactly 7 frets away? It's simple math: **1 fret = 1 Half Step**. By counting up from your Root, you can find any interval:
-- 1 fret = **b2**
-- 2 frets = **2**
-- 3 frets = **b3**
-- 4 frets = **3**
-- 5 frets = **4**
-- 6 frets = **b5**
-- 7 frets = **5**
-By counting up 7 frets, you are moving through 7 "Half Steps" to reach that stable Perfect 5th sound.
+- 0 frets = **Root (R)**
+- 1 fret = **b2** (Minor 2nd)
+- 2 frets = **2** (Major 2nd)
+- 3 frets = **b3** (Minor 3rd)
+- 4 frets = **3** (Major 3rd)
+- 5 frets = **4** (Perfect 4th)
+- 6 frets = **b5** (Blue Note)
+- 7 frets = **5** (Perfect 5th)
+By counting up 7 frets, you land on that stable Perfect 5th sound!
 targetInterval: 5
 actionText: Count 7 frets up to the 5th (Perfect 5th)
 
