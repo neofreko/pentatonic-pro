@@ -693,7 +693,7 @@ const App: React.FC = () => {
                           <div>
                             <h4 className="text-amber-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Interactive Guide</h4>
                             <h5 className="text-2xl font-black text-white mb-4 tracking-tight">{currentStep.title}</h5>
-                            <p className="text-slate-300 text-lg font-medium leading-relaxed max-w-2xl">{currentStep.instruction}</p>
+                            <p className="text-slate-300 text-lg font-medium leading-relaxed max-w-2xl whitespace-pre-wrap">{currentStep.instruction}</p>
                             <div className="mt-8 flex items-center gap-4">
                               {currentStep.noodleId ? (
                                 <button

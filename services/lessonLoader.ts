@@ -35,6 +35,7 @@ const parseMarkdownLessons = (markdown: string): Chapter[] => {
     let currentStep: Partial<TutorialStep> | null = null;
     let currentChallenge: Partial<Challenge> | null = null;
     let processingSection: 'CHAPTER' | 'STEP' | 'CHALLENGE' | null = null;
+    let lastProcessedKey: string | null = null;
 
     // Helper to finish processing the current item before starting a new one
     const commitCurrentItems = () => {
@@ -43,11 +44,7 @@ const parseMarkdownLessons = (markdown: string): Chapter[] => {
             currentChapter.tutorialSteps.push(currentStep as TutorialStep);
             currentStep = null;
         }
-        // Note: Challenges are attached to the chapter immediately upon creation in this simple parser logic, 
-        // or we can attach them at the end of the chapter block. 
-        // Let's attach at the end of chapter to be safe, but since 'Challenge' implies end of chapter usually, 
-        // we need to be careful.
-        // Actually, distinct blocks make it easier.
+        lastProcessedKey = null;
     };
 
     const commitChapter = () => {
@@ -60,7 +57,15 @@ const parseMarkdownLessons = (markdown: string): Chapter[] => {
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-        if (!line) continue;
+        if (!line) {
+            // Support empty lines in multi-line content
+            if (lastProcessedKey === 'instruction' && currentStep) {
+                currentStep.instruction += '\n';
+            } else if (lastProcessedKey === 'description' && currentChapter && processingSection === 'CHAPTER') {
+                currentChapter.description += '\n';
+            }
+            continue;
+        }
 
         if (line.startsWith('# ')) {
             // New Chapter
@@ -101,6 +106,8 @@ const parseMarkdownLessons = (markdown: string): Chapter[] => {
             const key = line.substring(0, colonIndex).trim();
             const value = line.substring(colonIndex + 1).trim();
 
+            lastProcessedKey = key;
+
             if (processingSection === 'CHAPTER' && currentChapter) {
                 if (key === 'id') currentChapter.id = value;
                 if (key === 'targetScaleType') currentChapter.targetScaleType = value as ScaleType;
@@ -117,6 +124,15 @@ const parseMarkdownLessons = (markdown: string): Chapter[] => {
                 if (key === 'targetInterval') currentChallenge.targetInterval = value;
                 if (key === 'description') currentChallenge.description = value;
                 if (key === 'requiredCount') currentChallenge.requiredCount = parseInt(value, 10);
+            }
+        } else {
+            // Multi-line support: line has no colon, so it might be a continuation
+            if (lastProcessedKey === 'instruction' && currentStep) {
+                currentStep.instruction = (currentStep.instruction || '') + '\n' + line;
+            } else if (lastProcessedKey === 'description' && currentChapter && processingSection === 'CHAPTER') {
+                currentChapter.description = (currentChapter.description || '') + '\n' + line;
+            } else if (lastProcessedKey === 'description' && currentChallenge && processingSection === 'CHALLENGE') {
+                currentChallenge.description = (currentChallenge.description || '') + '\n' + line;
             }
         }
     }
