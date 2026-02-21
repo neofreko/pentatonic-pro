@@ -48,4 +48,8 @@ You are working on the **Pentatonic Pro** project.
 ## 4. Behavior
 - **Verify (Tests):** Always verify your changes by running tests (`bun test`).
 - **Verify (Types):** Always run `bun run typecheck` before finishing. This catches scoping and type errors that tests might miss.
+- **Verify (Local/Browser):** Before pushing or finishing a task, verify the application in a real browser environment:
+    1. Start the dev server (`bun run dev`).
+    2. Use `agent-browser` to open the app, navigate to the relevant section, and confirm UI/UX correctness.
+    3. Take a screenshot if visual regression is a concern.
 - If a test doesn't exist for the code you are modifying, create one first.
