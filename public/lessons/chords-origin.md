@@ -3,7 +3,7 @@ id: chords-origin
 targetScaleType: major
 focus: Harmony
 mission: Understand how chords are built from scale degrees.
-description: Every chord you play is a selection of notes from a scale. When you play a C Major chord, you are playing the 1st, 3rd, and 5th notes of the C Major scale simultaneously.
+description: Every chord you play is a selection of notes from a scale. When you play a **C Major** chord, you are playing the **C (1st)**, **E (3rd)**, and **G (5th)** notes of the C Major scale simultaneously. These shapes are part of the **CAGED system**, which lets you play the same chord in 5 different positions.
 
 ## Tutorial Step: The Triad Concept
 instruction: The most basic chord is called a Triad. It consists of three notes. To build one, you start at the Root and skip every other note in the scale.
@@ -32,22 +32,39 @@ instruction: If we flatten the 3rd (move it down 1 fret), we get a Minor 3rd (b3
 targetInterval: b3
 actionText: Find the Minor 3rd (b3)
 
+## Tutorial Step: The "E Form" Shape
+instruction: The **E Form** is the most common barre chord shape. It’s based on the open E Major chord.
+- **Root (R)**: On the Low E-string.
+- **Perfect 5th (5)**: One string up (A) and two frets over.
+- **Root (R)**: One string up (D) and two frets over.
+- **Major 3rd (3)**: One string up (G) and one fret over.
+This vertical stacked shape is the foundation of rock guitar!
+targetInterval: R
+actionText: Locate the Low E Root for an E-shape barre
+
 ## Tutorial Step: The "A Form" Shape
 instruction: The **A Form** is derived from the open A Major chord. In this shape, the Root (R) is on the **A string**. You'll notice that the 5th, Root, and Major 3rd often line up vertically on the same fret across the D, G, and B strings. This creates a strong, "barre" style sound.
 targetInterval: R
 actionText: Locate a Root (R) on the A string
 
-## Tutorial Step: The "C Form" Shape
-instruction: The **C Form** comes from the open C Major chord. It is a more "diagonal" shape. If you find a Root (R) on the **A string**, the Major 3rd (3) will be found one string higher and one fret *down* (towards the nut), while another Root is found on the **B string**. It's a beautiful, spread-out voicing.
+## Tutorial Step: The "C Form" (The Staircase)
+instruction: The **C Form** is famous for its "staircase" or "diagonal" look. It’s based on the open C chord.
+- **Root (R)**: On the A-string.
+- **Major 3rd (3)**: One string up (D) and one fret *down* (towards the headstock).
+- **Perfect 5th (5)**: One string up (G) and one fret *down* again (or open).
+- **Root (R)**: On the B-string.
+This creates a beautiful, spread-out diagonal line across the middle strings!
 targetInterval: 3
-actionText: Find a Major 3rd (3) for a C-shape chord
+actionText: Find the Major 3rd (3) for the C-Staircase chord
 
 ## Chord Recipes to Try
 instruction: Use **Chord Mode** to build these common shapes:
 - **Major Triad:** Root (R) + Major 3rd (3) + Perfect 5th (5)
 - **Minor Triad:** Root (R) + Minor 3rd (b3) + Perfect 5th (5)
-- **A-Major Form:** Root (A-string) + 5th (D-string) + Root (G-string) + 3rd (B-string) -> *A classic vertical barre*
-- **C-Major Form:** Root (A-string) + 3rd (D-string) + 5th (G-string) + Root (B-string) -> *A diagonal spread*
+- **E-Major Form:** Root (Low E) + 5th (A) + Root (D) + 3rd (G) -> *The foundation barre*
+- **A-Major Form:** Root (A-string) + 5th (D-string) + Root (G-string) + 3rd (B-string) -> *Vertical barre*
+- **C-Major Form:** Root (A-string) + 3rd (D-string) + 5th (G-string) + Root (B-string) -> *The Staircase*
+- **Sus4 Chord:** Root (R) + 4th (4) + 5th (5) -> *Tension*
 - **Power Chord:** Root (R) + Perfect 5th (5) -> *Strong & Neutral*
 
 ## Proficiency Challenge
