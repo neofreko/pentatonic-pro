@@ -203,8 +203,9 @@ const App: React.FC = () => {
     posData.forEach(([sIdx, frets]: [number, number[]]) => {
       frets.forEach(fOffset => {
         let f = baseFret + fOffset;
+        // Wrap notes to stay within the visible fretboard range (0 to FRET_COUNT)
+        while (f > 15) f -= 12; 
         while (f < 0) f += 12;
-        while (f > 24) f -= 12;
         ids.add(`${sIdx}-${f}`);
       });
     });
@@ -583,14 +584,15 @@ const App: React.FC = () => {
                   </div>
                </div>
 
-               <Fretboard 
-                 rootNote={rootNote} scaleType={scaleType} showIntervals={showIntervals} 
-                 fretMarkerType={fretMarkerType} activeNoteId={activeNoteId} 
-                 noteTrail={noteTrail}
-                 positionNoteIds={currentPositionNoteIds} onNoteClick={handleNoteClick}
-                 heldNoteIds={heldNoteIds}
-               />
-
+                                  <Fretboard 
+                                    rootNote={rootNote} 
+                                    scaleType={isChordMode ? 'chromatic' : scaleType} 
+                                    showIntervals={showIntervals} 
+                                    fretMarkerType={fretMarkerType} activeNoteId={activeNoteId} 
+                                    noteTrail={noteTrail}
+                                    positionNoteIds={currentPositionNoteIds} onNoteClick={handleNoteClick}
+                                    heldNoteIds={heldNoteIds}
+                                  />
                <div className="flex flex-wrap items-center gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5 backdrop-blur-xl">
                   <div className="flex items-center gap-3 pr-6 border-r border-white/10">
                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Box Position</label>
@@ -710,7 +712,9 @@ const App: React.FC = () => {
                    </div>
                    
                    <Fretboard 
-                     rootNote={rootNote} scaleType={scaleType} showIntervals={showIntervals} 
+                     rootNote={rootNote} 
+                     scaleType={isChordMode ? 'chromatic' : scaleType} 
+                     showIntervals={showIntervals} 
                      fretMarkerType={fretMarkerType} activeNoteId={activeNoteId} 
                      noteTrail={noteTrail}
                      positionNoteIds={currentPositionNoteIds} onNoteClick={handleNoteClick}

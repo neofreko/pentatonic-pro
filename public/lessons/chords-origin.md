@@ -1,6 +1,6 @@
 # 4. Chords - Where do they come from?
 id: chords-origin
-targetScaleType: major
+targetScaleType: chromatic
 focus: Harmony
 mission: Understand how chords are built from scale degrees.
 description: Every chord you play is a selection of notes from a scale. When you play a **C Major** chord, you are playing the **C (1st)**, **E (3rd)**, and **G (5th)** notes of the C Major scale simultaneously. These shapes are part of the **CAGED system**, which lets you play the same chord in 5 different positions.
