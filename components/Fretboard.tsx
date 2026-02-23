@@ -16,6 +16,7 @@ interface FretboardProps {
   onNoteClick?: (string: number, fret: number, noteName: string, interval: string) => void;
   hideLabels?: boolean;
   successNoteIds?: string[];
+  heldNoteIds?: string[];
   errorNoteId?: string | null;
   highlightInterval?: string | null;
   hintNoteId?: string | null;
@@ -33,6 +34,7 @@ const Fretboard: React.FC<FretboardProps> = ({
   onNoteClick,
   hideLabels = false,
   successNoteIds = [],
+  heldNoteIds = [],
   errorNoteId = null,
   highlightInterval = null,
   hintNoteId = null
@@ -65,6 +67,7 @@ const Fretboard: React.FC<FretboardProps> = ({
     isTrailNote: boolean,
     trailIndex: number, // 0 is most recent, 3 is oldest
     isSuccess: boolean, 
+    isHeld: boolean,
     isError: boolean, 
     isDimmed: boolean,
     isHint: boolean
@@ -76,6 +79,9 @@ const Fretboard: React.FC<FretboardProps> = ({
     if (isCurrentlyPlaying) {
       colors = "bg-white text-slate-950 ring-white scale-125 z-[100] ring-offset-4";
       effects = "shadow-[0_0_50px_rgba(255,255,255,0.7)]";
+    } else if (isHeld) {
+      colors = "bg-amber-400 text-slate-950 ring-white scale-110 z-30";
+      effects = "shadow-[0_0_30px_rgba(245,158,11,0.6)] ring-4 ring-offset-4";
     } else if (isHint) {
       colors = "bg-amber-500 text-slate-950 ring-amber-400 scale-110 z-30 animate-pulse";
       effects = "shadow-[0_0_30px_rgba(245,158,11,0.6)] ring-4 ring-offset-4";
@@ -214,6 +220,7 @@ const Fretboard: React.FC<FretboardProps> = ({
                         const isTrailNote = trailIndex !== -1;
                         
                         const isSuccess = successNoteIds.includes(noteId);
+                        const isHeld = heldNoteIds.includes(noteId);
                         const isError = errorNoteId === noteId;
                         const isHintNote = hintNoteId === noteId;
                         const isInPosition = positionNoteIds?.has(noteId);
@@ -241,12 +248,13 @@ const Fretboard: React.FC<FretboardProps> = ({
                                     isTrailNote,
                                     trailIndex,
                                     !!isSuccess, 
+                                    isHeld,
                                     !!isError, 
                                     shouldDim,
                                     isHintNote
                                   )}
                                 >
-                                  {(!hideLabels || isSuccess || isCurrentlyPlaying || isTrailNote || isHintNote) && (
+                                  {(!hideLabels || isSuccess || isHeld || isCurrentlyPlaying || isTrailNote || isHintNote) && (
                                     <div className="flex flex-col items-center justify-center -space-y-1.5 pointer-events-none">
                                       <span className="text-[18px] font-black tracking-tighter">
                                         {showIntervals ? interval : noteName}

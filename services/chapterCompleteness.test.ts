@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { PENTATONIC_POSITIONS } from '../data/positions';
-import { NOTES, TUNING, SCALE_INTERVALS, FRET_COUNT } from '../constants';
+import { NOTES, TUNING } from '../constants';
 import { getIntervalName } from '../utils/musicLogic';
 import { ScaleType } from '../types';
 

@@ -1,3 +1,6 @@
+/**
+ * @vitest-environment happy-dom
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import App from './App';
@@ -6,6 +9,9 @@ import * as lessonLoader from './services/lessonLoader';
 vi.mock('tone', () => ({
     Reverb: vi.fn().mockImplementation(() => ({ toDestination: vi.fn().mockReturnThis(), connect: vi.fn().mockReturnThis(), set: vi.fn() })),
     Compressor: vi.fn().mockImplementation(() => ({ connect: vi.fn().mockReturnThis(), set: vi.fn() })),
+    PolySynth: vi.fn().mockImplementation(() => ({ connect: vi.fn().mockReturnThis(), set: vi.fn(), triggerAttack: vi.fn(), triggerAttackRelease: vi.fn(), volume: { value: 0 } })),
+    Sampler: vi.fn().mockImplementation(() => ({ connect: vi.fn().mockReturnThis(), set: vi.fn(), triggerAttack: vi.fn(), triggerAttackRelease: vi.fn(), volume: { value: 0 }, loaded: true })),
+    Synth: vi.fn().mockImplementation(() => ({ connect: vi.fn().mockReturnThis(), set: vi.fn() })),
     PluckSynth: vi.fn().mockImplementation(() => ({ connect: vi.fn().mockReturnThis(), set: vi.fn(), triggerAttack: vi.fn() })),
     MonoSynth: vi.fn().mockImplementation(() => ({ connect: vi.fn().mockReturnThis(), set: vi.fn(), triggerAttack: vi.fn(), triggerRelease: vi.fn() })),
     MembraneSynth: vi.fn().mockImplementation(() => ({ toDestination: vi.fn().mockReturnThis(), set: vi.fn(), triggerAttackRelease: vi.fn() })),

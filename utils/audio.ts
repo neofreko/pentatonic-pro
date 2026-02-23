@@ -11,13 +11,41 @@ const compressor = new Tone.Compressor({
   ratio: 3
 }).connect(reverb);
 
-// Guitar Synth: Karplus-Strong physical modeling
-const guitarSynth = new Tone.PluckSynth({
-  attackNoise: 1,
-  dampening: 4000,
-  resonance: 0.95,
-  volume: -6
+// Guitar Sampler: Uses real acoustic guitar samples for realistic strumming
+// Samples sourced from: https://github.com/nbrosowsky/tonejs-instruments
+// Strumming timing logic inspired by: https://github.com/NghiaLam2026/Strum_It_Your_Way
+const guitarSampler = new Tone.Sampler({
+  urls: {
+    "E2": "E2.mp3",
+    "A2": "A2.mp3",
+    "D3": "D3.mp3",
+    "G3": "G3.mp3",
+    "B3": "B3.mp3",
+    "E4": "E4.mp3",
+  },
+  baseUrl: "https://raw.githubusercontent.com/nbrosowsky/tonejs-instruments/master/samples/guitar-acoustic/",
+  onload: () => {
+    console.log("Guitar samples loaded!");
+  }
 }).connect(compressor);
+guitarSampler.volume.value = -6;
+
+// Fallback Synth (for when samples are loading or if they fail)
+const fallbackSynth = new Tone.PolySynth(Tone.Synth, {
+  oscillator: { type: "triangle" },
+  envelope: {
+    attack: 0.005,
+    decay: 0.3,
+    sustain: 0,
+    release: 1
+  }
+}).connect(compressor);
+fallbackSynth.volume.value = -6;
+
+// Helper to choose instrument
+const getGuitar = () => {
+  return guitarSampler.loaded ? guitarSampler : fallbackSynth;
+};
 
 // Drone Synth: Warm background pad for jamming
 const droneSynth = new Tone.MonoSynth({
@@ -49,9 +77,40 @@ export const setBpm = (bpm: number) => {
   Tone.getTransport().bpm.value = bpm;
 };
 
-export const playNote = (midiNote: number) => {
+export const playNote = async (midiNote: number) => {
+  await initAudio();
   const freq = Tone.Frequency(midiNote, "midi").toFrequency();
-  guitarSynth.triggerAttack(freq, Tone.now());
+  getGuitar().triggerAttackRelease(freq, "2m", Tone.now());
+};
+
+/**
+ * Plays multiple notes at the exact same time.
+ */
+export const playChord = async (midiNotes: number[]) => {
+  await initAudio();
+  const freqs = midiNotes.map(m => Tone.Frequency(m, "midi").toFrequency());
+  getGuitar().triggerAttackRelease(freqs, "2m", Tone.now());
+};
+
+/**
+ * Plays multiple notes in a quick sequence to simulate a guitar strum.
+ */
+export const strumChord = async (midiNotes: number[]) => {
+  await initAudio();
+  const now = Tone.now();
+  // Sort midis so we always strum from low to high
+  const sortedMidis = [...midiNotes].sort((a, b) => a - b);
+  const guitar = getGuitar();
+  
+  sortedMidis.forEach((midi, i) => {
+    const freq = Tone.Frequency(midi, "midi").toFrequency();
+    // 30ms delay per string matches the reference repo's natural strum feel
+    const timeOffset = i * 0.030;
+    const velocity = 0.8 - (i * 0.05); // Slight decay in force across strings
+    
+    // Using "2m" (2 measures) lets the sample ring out naturally for a long time
+    guitar.triggerAttackRelease(freq, "2m", now + timeOffset, velocity);
+  });
 };
 
 /**
@@ -78,7 +137,7 @@ export const startSequence = (
   activeSequence = new Tone.Sequence(
     (time, note) => {
       const freq = Tone.Frequency(note.midi, "midi").toFrequency();
-      guitarSynth.triggerAttack(freq, time);
+      getGuitar().triggerAttackRelease(freq, "2n", time);
       
       Tone.Draw.schedule(() => {
         onStep(note.id);
@@ -129,16 +188,16 @@ export const toggleMetronome = (isActive: boolean) => {
 export const setAudioPreset = (preset: 'clean' | 'crunch' | 'dreamy') => {
   switch (preset) {
     case 'clean':
-      guitarSynth.set({ dampening: 4000, resonance: 0.95 });
       reverb.set({ wet: 0.3 });
+      fallbackSynth.set({ oscillator: { type: "triangle" } });
       break;
     case 'crunch':
-      guitarSynth.set({ dampening: 2000, resonance: 0.8 });
       reverb.set({ wet: 0.4 });
+      fallbackSynth.set({ oscillator: { type: "sawtooth" } }); // Crunchier fallback
       break;
     case 'dreamy':
-      guitarSynth.set({ dampening: 6000, resonance: 0.98 });
       reverb.set({ wet: 0.6 });
+      fallbackSynth.set({ oscillator: { type: "sine" } }); // Dreamier fallback
       break;
   }
 };

@@ -22,9 +22,8 @@ export const initiateOpenRouterLogin = async () => {
     // Store code_verifier to exchange it later
     localStorage.setItem('openrouter_code_verifier', codeVerifier);
 
-    // Use origin + BASE_URL to ensure we match Vite's routing exactly
-    const baseUrl = (import.meta as any).env.BASE_URL || '/';
-    const callbackUrl = window.location.origin + (baseUrl.endsWith('/') ? baseUrl : baseUrl + '/');
+    // Explicitly use the current origin and path without trailing slashes to avoid double-pathing
+    const callbackUrl = window.location.origin + window.location.pathname;
 
     const authUrl = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(callbackUrl)}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
 
@@ -56,9 +55,9 @@ export const handleOpenRouterCallback = async () => {
                 // Clear the verifier and the code from URL
                 localStorage.removeItem('openrouter_code_verifier');
 
-                // Remove code from URL without refreshing
-                const baseUrl = (import.meta as any).env.BASE_URL || '/';
-                const cleanUrl = window.location.origin + (baseUrl.endsWith('/') ? baseUrl : baseUrl + '/');
+                // Remove code from URL without refreshing, maintaining the current path
+                // Ensure we don't accidentally double the base path
+                const cleanUrl = window.location.origin + window.location.pathname;
                 window.history.replaceState({}, document.title, cleanUrl);
 
                 return { success: true, key: data.key };

@@ -11,8 +11,9 @@ Pentatonic Pro is a specialized guitar pedagogy application designed to bridge t
 - **Positioning**: Fretboard positions are calculated as `(OpenStringNote + Fret) % 12`.
 
 ### Audio Service (`utils/audio.ts`)
-- Uses the **Web Audio API**.
-- Implements a basic synthesis engine (Triangle Oscillator with an Exponential Decay Envelope) to simulate a guitar pluck without external assets.
+- Uses the **Web Audio API** and **Tone.js**.
+- Implements a high-fidelity sampling engine using real acoustic guitar recordings for authentic tone.
+- Features custom strumming and arpeggiation logic to simulate physical guitar techniques.
 
 ### AI Integration (`services/geminiService.ts`)
 - **Model**: `gemini-3-flash-preview` for high-speed instructional generation.
@@ -28,7 +29,11 @@ The syllabus is defined in `data/chapters.ts` using the following interface:
 - **Colors**: Slate-950 background for high contrast, Amber-500 for primary actions and Roots, Indigo-500 for challenges.
 - **Fretboard**: 15 frets by default. Includes standard dot inlays at 3, 5, 7, 9, 12.
 
-## 5. Maintenance
+## 5. Attributions
+- **Acoustic Guitar Samples**: Sourced from the [nbrosowsky/tonejs-instruments](https://github.com/nbrosowsky/tonejs-instruments) repository.
+- **Strumming Logic Reference**: Strumming timing and arpeggiation logic inspired by the [Strum It Your Way](https://github.com/NghiaLam2026/Strum_It_Your_Way) project by Nghia Lam.
+
+## 6. Maintenance
 To add a new chapter:
 1. Define the structure in `types.ts`.
 2. Add a new object to the `CHAPTERS` array in `data/chapters.ts`.

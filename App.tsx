@@ -13,9 +13,9 @@ import {
   LogOut, Zap, Mic2, Play as PlayIcon, Bell, Waves, Timer, Repeat, Square,
   BrainCircuit, ArrowRightLeft
 } from 'lucide-react';
-import { initAudio, setBpm, startSequence, stopActiveSequence, toggleMetronome, toggleDrone } from './utils/audio';
+import { initAudio, setBpm, startSequence, stopActiveSequence, toggleMetronome, toggleDrone, strumChord, playChord } from './utils/audio';
 import { getIntervalName, getNoteAtPosition } from './utils/musicLogic';
-import { initiateOpenRouterLogin } from './utils/openRouterAuth';
+import { initiateOpenRouterLogin, handleOpenRouterCallback } from './utils/openRouterAuth';
 
 type FretMarkerType = 'number' | 'note';
 type PhrasingPattern = 'LINEAR' | 'TRIPLETS' | 'QUARTETS' | 'STRING_SKIP';
@@ -27,6 +27,18 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('current_position');
     return saved ? parseInt(saved, 10) : 1;
   });
+
+  // Handle OpenRouter callback
+  useEffect(() => {
+    const checkAuth = async () => {
+      const result = await handleOpenRouterCallback();
+      if (result?.success) {
+        setTempApiKey(result.key);
+        // Maybe show a success toast or notification
+      }
+    };
+    checkAuth();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('root_note', rootNote);
@@ -83,6 +95,7 @@ const App: React.FC = () => {
   } = useBackingTrack();
 
   const [successNoteIds, setSuccessNoteIds] = useState<string[]>([]);
+  const [heldNoteIds, setHeldNoteIds] = useState<string[]>([]);
   const [errorNoteId, setErrorNoteId] = useState<string | null>(null);
   const [challengeComplete, setChallengeComplete] = useState(false);
 
@@ -91,6 +104,26 @@ const App: React.FC = () => {
     setBpmState(newBpm);
     setBpm(newBpm);
   };
+
+  const handleStrum = useCallback(() => {
+    if (heldNoteIds.length === 0) return;
+    initAudio();
+    const midis = heldNoteIds.map(id => {
+      const [s, f] = id.split('-').map(Number);
+      return MIDI_TUNING[s] + f;
+    }).sort((a, b) => a - b); // Strum from low to high
+    strumChord(midis);
+  }, [heldNoteIds]);
+
+  const handleChordHit = useCallback(() => {
+    if (heldNoteIds.length === 0) return;
+    initAudio();
+    const midis = heldNoteIds.map(id => {
+      const [s, f] = id.split('-').map(Number);
+      return MIDI_TUNING[s] + f;
+    });
+    playChord(midis);
+  }, [heldNoteIds]);
 
   const handleMetronomeToggle = () => {
     const nextState = !isMetronomeOn;
@@ -117,6 +150,7 @@ const App: React.FC = () => {
 
   const [showSettings, setShowSettings] = useState(false);
   const [isJamming, setIsJamming] = useState(false);
+  const [isChordMode, setIsChordMode] = useState(false);
   const [jamTip, setJamTip] = useState<string | null>(null);
   const [loadingTip, setLoadingTip] = useState(false);
 
@@ -241,6 +275,17 @@ const App: React.FC = () => {
   const handleNoteClick = useCallback((s: number, f: number, _noteName: string, interval: string) => {
     initAudio();
     const noteId = `${s}-${f}`;
+    
+    if (isChordMode) {
+      setHeldNoteIds(prev => 
+        prev.includes(noteId) 
+          ? prev.filter(id => id !== noteId) 
+          : [...prev, noteId]
+      );
+      // Still play the note when clicked in chord mode for feedback
+      return;
+    }
+
     setActiveNoteId(noteId);
     setHintNoteId(null);
     setNoteTrail(prev => [noteId, ...prev].slice(0, 4));
@@ -274,7 +319,7 @@ const App: React.FC = () => {
         setTimeout(() => setErrorNoteId(null), 500);
       }
     }
-  }, [phase, challengeComplete, successNoteIds, currentChapter, completedChapters, rootNote, scaleType, currentPositionNoteIds, currentStep, setTutorialSuccess, activeStepIndex]);
+  }, [isChordMode, phase, challengeComplete, successNoteIds, currentChapter, completedChapters, rootNote, scaleType, currentPositionNoteIds, currentStep, setTutorialSuccess, activeStepIndex]);
 
   const startChallenge = () => {
     setPhase('CHALLENGE');
@@ -543,7 +588,56 @@ const App: React.FC = () => {
                  fretMarkerType={fretMarkerType} activeNoteId={activeNoteId} 
                  noteTrail={noteTrail}
                  positionNoteIds={currentPositionNoteIds} onNoteClick={handleNoteClick}
+                 heldNoteIds={heldNoteIds}
                />
+
+               <div className="flex flex-wrap items-center gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5 backdrop-blur-xl">
+                  <div className="flex items-center gap-3 pr-6 border-r border-white/10">
+                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Box Position</label>
+                     <div className="flex gap-1.5">
+                        {[1, 2, 3, 4, 5].map(p => (
+                           <button 
+                             key={p} onClick={() => { setCurrentPosition(p); resetSequence(); }}
+                             className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black transition-all ${currentPosition === p ? 'bg-amber-500 text-slate-950 shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                           >
+                             {p}
+                           </button>
+                        ))}
+                     </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Visuals</label>
+                     <button onClick={() => setShowIntervals(!showIntervals)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${showIntervals ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400'}`}>Intervals</button>
+                     <button onClick={() => setFretMarkerType(fretMarkerType === 'number' ? 'note' : 'number')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors`}>{fretMarkerType === 'number' ? 'Fret #' : 'Notes'}</button>
+                  </div>
+                  <div className="w-[1px] h-6 bg-white/10 mx-2" />
+                  <div className="flex items-center gap-3">
+                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Chord Lab</label>
+                     <button 
+                        onClick={() => { setIsChordMode(!isChordMode); if (isChordMode) setHeldNoteIds([]); }} 
+                        className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-2 ${isChordMode ? 'bg-amber-500 text-slate-950 shadow-lg' : 'bg-slate-800 text-slate-400'}`}
+                     >
+                        <Waves className={`w-3 h-3 ${isChordMode ? 'animate-pulse' : ''}`} />
+                        {isChordMode ? 'Exit Chord Mode' : 'Enter Chord Mode'}
+                     </button>
+                     {isChordMode && heldNoteIds.length > 0 && (
+                        <div className="flex gap-2">
+                           <button 
+                              onClick={handleChordHit} 
+                              className="px-6 py-2 bg-amber-500 text-slate-950 rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg animate-in zoom-in"
+                           >
+                              Hit Chord
+                           </button>
+                           <button 
+                              onClick={handleStrum} 
+                              className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg animate-in zoom-in"
+                           >
+                              Strum {heldNoteIds.length} Notes
+                           </button>
+                        </div>
+                     )}
+                  </div>
+               </div>
 
                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="bg-slate-900/30 border border-white/5 rounded-[2rem] p-10 flex flex-col justify-between backdrop-blur-sm">
@@ -621,6 +715,7 @@ const App: React.FC = () => {
                      noteTrail={noteTrail}
                      positionNoteIds={currentPositionNoteIds} onNoteClick={handleNoteClick}
                      hideLabels={phase === 'CHALLENGE'} successNoteIds={successNoteIds} 
+                     heldNoteIds={heldNoteIds}
                      errorNoteId={errorNoteId} highlightInterval={phase === 'LEARNING' ? currentStep?.targetInterval : null}
                      hintNoteId={hintNoteId}
                    />
@@ -643,6 +738,36 @@ const App: React.FC = () => {
                          <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Visuals</label>
                          <button onClick={() => setShowIntervals(!showIntervals)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${showIntervals ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400'}`}>Intervals</button>
                          <button onClick={() => setFretMarkerType(fretMarkerType === 'number' ? 'note' : 'number')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors`}>{fretMarkerType === 'number' ? 'Fret #' : 'Notes'}</button>
+                      </div>
+                      <div className="w-[1px] h-6 bg-white/10 mx-2" />
+                      <div className="flex items-center gap-3">
+                         <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Chord Lab</label>
+                         <button 
+                            onClick={() => { setIsChordMode(!isChordMode); if (isChordMode) setHeldNoteIds([]); }} 
+                            className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-2 ${isChordMode ? 'bg-amber-500 text-slate-950 shadow-lg' : 'bg-slate-800 text-slate-400'}`}
+                         >
+                            <Waves className={`w-3 h-3 ${isChordMode ? 'animate-pulse' : ''}`} />
+                            {isChordMode ? 'Exit Chord Mode' : 'Enter Chord Mode'}
+                         </button>
+                         {isChordMode && heldNoteIds.length > 0 && (
+                            <div className="flex gap-2">
+                               <button 
+                                  onClick={handleChordHit} 
+                                  className="px-6 py-2 bg-amber-500 text-slate-950 rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg animate-in zoom-in"
+                               >
+                                  Hit Chord
+                               </button>
+                               <button 
+                                  onClick={handleStrum} 
+                                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg animate-in zoom-in"
+                               >
+                                  Strum {heldNoteIds.length} Notes
+                               </button>
+                            </div>
+                         )}
+                         {isChordMode && heldNoteIds.length > 0 && (
+                            <button onClick={() => setHeldNoteIds([])} className="p-2 text-slate-500 hover:text-red-400 transition-colors"><RotateCcw className="w-4 h-4" /></button>
+                         )}
                       </div>
                    </div>
 
